@@ -36,7 +36,10 @@ class MainLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         backgroundColor: const Color(0xFF7FA8B8),
         title: Text(
@@ -57,35 +60,35 @@ class MainLayout extends StatelessWidget {
             : null,
         toolbarHeight: 56,
       ),
-      body: SafeArea(
-        child: child,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF7FA8B8),
-        unselectedItemColor: Colors.black54,
-        selectedFontSize: 12,
-        unselectedFontSize: 12,
-        onTap: (i) => _onTap(context, i),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: "Inicio",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.self_improvement),
-            label: "Ayuda breve",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart),
-            label: "Historial",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.phone),
-            label: "Fono Ayuda",
-          ),
-        ],
-      ),
+      body: child,
+      bottomNavigationBar: keyboardOpen
+          ? null
+          : BottomNavigationBar(
+              type: BottomNavigationBarType.fixed,
+              selectedItemColor: const Color(0xFF7FA8B8),
+              unselectedItemColor: Colors.black54,
+              selectedFontSize: 12,
+              unselectedFontSize: 12,
+              onTap: (i) => _onTap(context, i),
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.home),
+                  label: "Inicio",
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.self_improvement),
+                  label: "Ayuda breve",
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.bar_chart),
+                  label: "Historial",
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.phone),
+                  label: "Fono Ayuda",
+                ),
+              ],
+            ),
     );
   }
 }

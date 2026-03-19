@@ -23,21 +23,38 @@ class FeedbackScreen extends StatefulWidget {
 
 class _FeedbackScreenState extends State<FeedbackScreen> {
   String? selectedFeedback;
+  bool _isSaving = false;
 
   Future<void> _saveFeedback(String feedback) async {
-    await HistoryService.addRecord(
-      EmotionRecord(
-        emotion: widget.emotion,
-        intensity: widget.intensity,
-        intervention: widget.intervention,
-        feedback: feedback,
-        timestamp: DateTime.now(),
-      ),
-    );
+    if (_isSaving) return;
 
     setState(() {
-      selectedFeedback = feedback;
+      _isSaving = true;
     });
+
+    try {
+      await HistoryService.addRecord(
+        EmotionRecord(
+          emotion: widget.emotion,
+          intensity: widget.intensity,
+          intervention: widget.intervention,
+          feedback: feedback,
+          timestamp: DateTime.now(),
+        ),
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        selectedFeedback = feedback;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   String _getResponseMessage() {
@@ -63,6 +80,24 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         return "No pasa nada si esto no era lo que necesitabas. Probemos otra vía.";
       default:
         return "";
+    }
+  }
+
+  String _getInterventionLabel() {
+    switch (widget.intervention) {
+      case "breathing":
+        return "respiración guiada";
+      case "grounding":
+        return "volver al presente";
+      case "reframe":
+        return "reencuadre mental";
+      case "micro_action":
+        return "acción concreta";
+      case "support_path":
+        return "ruta de apoyo";
+      case "conversation":
+      default:
+        return "acompañamiento conversacional";
     }
   }
 
@@ -96,6 +131,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   @override
   Widget build(BuildContext context) {
     return MainLayout(
+      title: "Tu respuesta importa",
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -112,10 +148,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text(
-                "Tu respuesta me ayuda a entender mejor qué te sirve.",
+              Text(
+                "ArmonIA te acompañó con ${_getInterventionLabel()}. Tu respuesta ayuda a entender mejor qué te sirve.",
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   color: Colors.black54,
                   height: 1.4,
@@ -123,17 +159,23 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               ),
               const SizedBox(height: 40),
               ElevatedButton(
-                onPressed: () => _saveFeedback("good"),
-                child: const Text("Sí, me ayudó"),
+                onPressed: _isSaving ? null : () => _saveFeedback("good"),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text("Sí, me ayudó"),
               ),
               const SizedBox(height: 12),
               ElevatedButton(
-                onPressed: () => _saveFeedback("neutral"),
+                onPressed: _isSaving ? null : () => _saveFeedback("neutral"),
                 child: const Text("Un poco"),
               ),
               const SizedBox(height: 12),
               ElevatedButton(
-                onPressed: () => _saveFeedback("bad"),
+                onPressed: _isSaving ? null : () => _saveFeedback("bad"),
                 child: const Text("No mucho"),
               ),
             ] else ...[

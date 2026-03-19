@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -29,6 +30,7 @@ class AiResponse {
 
 class AiService {
   static const String _baseUrl = 'https://armonia-yvx6.onrender.com';
+  static const Duration _timeout = Duration(seconds: 40);
 
   static Future<AiResponse> getConversationResponse({
     required String emotion,
@@ -36,6 +38,80 @@ class AiService {
     required String briefContext,
     required String userMessage,
     String recentHistorySummary = "",
+  }) async {
+    try {
+      return await _sendRequest(
+        emotion: emotion,
+        intensity: intensity,
+        briefContext: briefContext,
+        userMessage: userMessage,
+        recentHistorySummary: recentHistorySummary,
+      );
+    } on TimeoutException {
+      await Future.delayed(const Duration(seconds: 2));
+
+      try {
+        return await _sendRequest(
+          emotion: emotion,
+          intensity: intensity,
+          briefContext: briefContext,
+          userMessage: userMessage,
+          recentHistorySummary: recentHistorySummary,
+        );
+      } on TimeoutException {
+        throw Exception(
+          'Estoy tardando más de lo normal en responder. Respira un momento y vuelve a intentarlo.',
+        );
+      } on http.ClientException {
+        throw Exception(
+          'No pude conectarme bien ahora. Revisemos la conexión e intentemos otra vez.',
+        );
+      } catch (_) {
+        throw Exception(
+          'Ahora mismo me está costando responderte. Probemos otra vez con calma.',
+        );
+      }
+    } on http.ClientException {
+      await Future.delayed(const Duration(seconds: 2));
+
+      try {
+        return await _sendRequest(
+          emotion: emotion,
+          intensity: intensity,
+          briefContext: briefContext,
+          userMessage: userMessage,
+          recentHistorySummary: recentHistorySummary,
+        );
+      } on TimeoutException {
+        throw Exception(
+          'Estoy tardando más de lo normal en responder. Respira un momento y vuelve a intentarlo.',
+        );
+      } on http.ClientException {
+        throw Exception(
+          'No pude conectarme bien ahora. Revisemos la conexión e intentemos otra vez.',
+        );
+      } catch (_) {
+        throw Exception(
+          'Ahora mismo me está costando responderte. Probemos otra vez con calma.',
+        );
+      }
+    } on FormatException {
+      throw Exception(
+        'Tuve un problema para responderte bien. Intentémoslo de nuevo en un momento.',
+      );
+    } catch (_) {
+      throw Exception(
+        'Ahora mismo me está costando responderte. Probemos otra vez con calma.',
+      );
+    }
+  }
+
+  static Future<AiResponse> _sendRequest({
+    required String emotion,
+    required String intensity,
+    required String briefContext,
+    required String userMessage,
+    required String recentHistorySummary,
   }) async {
     final uri = Uri.parse('$_baseUrl/armonia/respond');
 
@@ -54,18 +130,20 @@ class AiService {
             'recent_history_summary': recentHistorySummary,
           }),
         )
-        .timeout(const Duration(seconds: 25));
+        .timeout(_timeout);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Error IA (${response.statusCode}): ${response.body}',
+        'Ahora mismo no pude responder como esperaba. Probemos nuevamente en un momento.',
       );
     }
 
-    final decoded = jsonDecode(response.body);
+    final dynamic decoded = jsonDecode(response.body);
 
     if (decoded is! Map<String, dynamic>) {
-      throw Exception('Respuesta inválida del backend IA');
+      throw Exception(
+        'No pude ordenar bien la respuesta. Intentémoslo otra vez en un momento.',
+      );
     }
 
     return AiResponse.fromJson(decoded);

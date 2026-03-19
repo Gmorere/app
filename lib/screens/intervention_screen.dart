@@ -35,7 +35,7 @@ class _InterventionScreenState extends State<InterventionScreen> {
   @override
   void initState() {
     super.initState();
-    intervention = widget.decision.intervention;
+    intervention = widget.decision.intervention.trim().toLowerCase();
   }
 
   String _getTitle(String intervention) {
@@ -76,7 +76,7 @@ class _InterventionScreenState extends State<InterventionScreen> {
       case "support_path":
         return "Lo más importante ahora es acompañarte y acercarte a apoyo real.";
       default:
-        return "";
+        return "Vamos a elegir una ayuda simple para acompañarte mejor ahora.";
     }
   }
 
@@ -97,7 +97,7 @@ class _InterventionScreenState extends State<InterventionScreen> {
       case "support_path":
         return "Ver apoyo";
       default:
-        return "Empezar";
+        return "Continuar";
     }
   }
 
@@ -163,6 +163,108 @@ class _InterventionScreenState extends State<InterventionScreen> {
         return Icons.support_agent;
       default:
         return Icons.circle_outlined;
+    }
+  }
+
+  void _goToNextScreen() {
+    switch (intervention) {
+      case "breathing":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BreathingScreen(
+              emotion: widget.emotion,
+              intensity: widget.intensity,
+            ),
+          ),
+        );
+        break;
+
+      case "clench_fists":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ClenchFistsScreen(
+              emotion: widget.emotion,
+              intensity: widget.intensity,
+            ),
+          ),
+        );
+        break;
+
+      case "grounding":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => GroundingScreen(
+              emotion: widget.emotion,
+              intensity: widget.intensity,
+            ),
+          ),
+        );
+        break;
+
+      case "micro_action":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MicroActionScreen(
+              emotion: widget.emotion,
+              intensity: widget.intensity,
+            ),
+          ),
+        );
+        break;
+
+      case "reframe":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ReframeScreen(
+              emotion: widget.emotion,
+              intensity: widget.intensity,
+            ),
+          ),
+        );
+        break;
+
+      case "conversation":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ConversationScreen(
+              emotion: widget.emotion,
+              intensity: widget.intensity,
+              briefContext: widget.briefContext,
+            ),
+          ),
+        );
+        break;
+
+      case "support_path":
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SupportPathScreen(
+              emotion: widget.emotion,
+              intensity: widget.intensity,
+            ),
+          ),
+        );
+        break;
+
+      default:
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ConversationScreen(
+              emotion: widget.emotion,
+              intensity: widget.intensity,
+              briefContext: widget.briefContext,
+            ),
+          ),
+        );
+        break;
     }
   }
 
@@ -258,82 +360,7 @@ class _InterventionScreenState extends State<InterventionScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  onPressed: () {
-                    if (intervention == "breathing") {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => BreathingScreen(
-                            emotion: widget.emotion,
-                            intensity: widget.intensity,
-                          ),
-                        ),
-                      );
-                    } else if (intervention == "clench_fists") {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ClenchFistsScreen(
-                            emotion: widget.emotion,
-                            intensity: widget.intensity,
-                          ),
-                        ),
-                      );
-                    } else if (intervention == "grounding") {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => GroundingScreen(
-                            emotion: widget.emotion,
-                            intensity: widget.intensity,
-                          ),
-                        ),
-                      );
-                    } else if (intervention == "micro_action") {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => MicroActionScreen(
-                            emotion: widget.emotion,
-                            intensity: widget.intensity,
-                          ),
-                        ),
-                      );
-                    } else if (intervention == "reframe") {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ReframeScreen(
-                            emotion: widget.emotion,
-                            intensity: widget.intensity,
-                          ),
-                        ),
-                      );
-                    } else if (intervention == "conversation") {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ConversationScreen(
-                            emotion: widget.emotion,
-                            intensity: widget.intensity,
-                            briefContext: widget.briefContext,
-                          ),
-                        ),
-                      );
-                    } else if (intervention == "support_path") {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => SupportPathScreen(
-                            emotion: widget.emotion,
-                            intensity: widget.intensity,
-                          ),
-                        ),
-                      );
-                    } else {
-                      Navigator.popUntil(context, (route) => route.isFirst);
-                    }
-                  },
+                  onPressed: _goToNextScreen,
                   child: Text(
                     _getActionLabel(intervention),
                     style: const TextStyle(

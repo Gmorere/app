@@ -34,13 +34,13 @@ class ArmonIAApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
         useMaterial3: true,
       ),
+      initialRoute: '/',
       routes: {
-        "/": (_) => const HomeScreen(),
-        "/history": (_) => const HistoryScreen(),
-        "/exercises": (_) => const ExercisesScreen(),
-        "/fono": (_) => const FonoAyudaScreen(),
+        '/': (_) => const HomeScreen(),
+        '/history': (_) => const HistoryScreen(),
+        '/exercises': (_) => const ExercisesScreen(),
+        '/fono': (_) => const FonoAyudaScreen(),
       },
-      initialRoute: "/",
     );
   }
 }

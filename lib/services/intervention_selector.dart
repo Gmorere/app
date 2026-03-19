@@ -46,7 +46,8 @@ class InterventionSelector {
         validationMessage: historyRecommendation.message,
         fromHistory: true,
         usedFallback: false,
-        requiresSupportPath: false,
+        requiresSupportPath:
+            historyRecommendation.intervention == "support_path",
         rationale:
             "Se priorizó una intervención del historial que ayudó antes en un estado similar.",
       );
@@ -77,7 +78,7 @@ class InterventionSelector {
       validationMessage: validationMessage,
       fromHistory: false,
       usedFallback: lastInterventionFailed,
-      requiresSupportPath: false,
+      requiresSupportPath: selectedIntervention == "support_path",
       rationale: _buildRationale(
         emotion: normalizedEmotion,
         intensity: normalizedIntensity,
@@ -105,12 +106,16 @@ class InterventionSelector {
         baseType = _selectForBlocked(intensity);
         break;
       case "molesto":
+      case "rabia":
+      case "enojo":
         baseType = _selectForAnger(intensity);
         break;
       case "triste":
+      case "pena":
         baseType = _selectForSadness(intensity);
         break;
       case "sobrepasado":
+      case "sobrecarga":
         baseType = _selectForOverwhelmed(intensity);
         break;
       default:
@@ -221,11 +226,12 @@ class InterventionSelector {
     final lowCoping =
         pulse.copingCapacity == "muy baja" || pulse.copingCapacity == "baja";
 
-    if (highIrritability && emotion == "molesto") {
+    if (highIrritability &&
+        (emotion == "molesto" || emotion == "rabia" || emotion == "enojo")) {
       return InterventionType.physicalRegulation;
     }
 
-    if (highOverload && emotion == "sobrepasado") {
+    if (highOverload && (emotion == "sobrepasado" || emotion == "sobrecarga")) {
       return InterventionType.concreteAction;
     }
 
@@ -233,7 +239,7 @@ class InterventionSelector {
       return InterventionType.concreteAction;
     }
 
-    if (lowConnection && emotion == "triste") {
+    if (lowConnection && (emotion == "triste" || emotion == "pena")) {
       return InterventionType.conversation;
     }
 
@@ -265,22 +271,33 @@ class InterventionSelector {
 
     switch (failedType) {
       case InterventionType.physicalRegulation:
-        if (emotion == "ansiedad" || emotion == "molesto") {
+        if (emotion == "ansiedad") {
           return InterventionType.conversation;
         }
-        return InterventionType.concreteAction;
+        if (emotion == "rabia" || emotion == "enojo" || emotion == "molesto") {
+          return InterventionType.conversation;
+        }
+        return baseType == InterventionType.physicalRegulation
+            ? InterventionType.conversation
+            : baseType;
 
       case InterventionType.conversation:
         if (emotion == "ansiedad" && intensity == "alto") {
           return InterventionType.physicalRegulation;
         }
-        return InterventionType.concreteAction;
+        if (emotion == "bloqueado" || emotion == "sobrepasado") {
+          return InterventionType.concreteAction;
+        }
+        if (emotion == "rabia" || emotion == "enojo" || emotion == "molesto") {
+          return InterventionType.physicalRegulation;
+        }
+        return baseType;
 
       case InterventionType.mentalReframe:
         return InterventionType.conversation;
 
       case InterventionType.concreteAction:
-        if (emotion == "ansiedad" || emotion == "molesto") {
+        if (emotion == "ansiedad" || emotion == "rabia" || emotion == "enojo" || emotion == "molesto") {
           return InterventionType.physicalRegulation;
         }
         return InterventionType.conversation;
@@ -297,18 +314,15 @@ class InterventionSelector {
         if (emotion == "ansiedad") {
           return intensity == "alto" ? "breathing" : "grounding";
         }
-        if (emotion == "molesto") {
+        if (emotion == "molesto" || emotion == "rabia" || emotion == "enojo") {
           return intensity == "alto" ? "clench_fists" : "grounding";
         }
-        if (emotion == "sobrepasado") {
+        if (emotion == "sobrepasado" || emotion == "sobrecarga") {
           return "grounding";
         }
         return "breathing";
 
       case InterventionType.concreteAction:
-        if (emotion == "bloqueado" || emotion == "sobrepasado") {
-          return "micro_action";
-        }
         return "micro_action";
 
       case InterventionType.mentalReframe:
@@ -323,15 +337,16 @@ class InterventionSelector {
     switch (intervention) {
       case "breathing":
       case "grounding":
+      case "clench_fists":
         return InterventionType.physicalRegulation;
 
-      case "clench_fists":
       case "micro_action":
         return InterventionType.concreteAction;
 
       case "reframe":
         return InterventionType.mentalReframe;
 
+      case "support_path":
       case "conversation":
       default:
         return InterventionType.conversation;
