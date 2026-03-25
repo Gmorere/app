@@ -16,7 +16,7 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  static const Duration _submitTimeout = Duration(seconds: 20);
+  static const Duration _submitTimeout = Duration(seconds: 45);
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -25,6 +25,13 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLoginMode = true;
   bool _isLoading = false;
   String? _errorMessage;
+  Future<void>? _warmupFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _warmupFuture = _wakeBackend();
+  }
 
   @override
   void dispose() {
@@ -38,7 +45,7 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       await http
           .get(Uri.parse('${BackendConfig.baseUrl}/health'))
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 15));
     } catch (_) {}
   }
 
@@ -90,7 +97,7 @@ class _AuthScreenState extends State<AuthScreen> {
     });
 
     try {
-      await _wakeBackend();
+      await (_warmupFuture ?? _wakeBackend());
 
       final uri = Uri.parse(
         _isLoginMode
@@ -109,16 +116,26 @@ class _AuthScreenState extends State<AuthScreen> {
               'display_name': displayName,
             };
 
-      final response = await http
-          .post(
-            uri,
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode(body),
-          )
-          .timeout(_submitTimeout);
+      Future<http.Response> sendRequest() {
+        return http
+            .post(
+              uri,
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+              body: jsonEncode(body),
+            )
+            .timeout(_submitTimeout);
+      }
+
+      http.Response response;
+      try {
+        response = await sendRequest();
+      } on TimeoutException {
+        await _wakeBackend();
+        response = await sendRequest();
+      }
 
       dynamic decoded;
       try {
@@ -166,7 +183,7 @@ class _AuthScreenState extends State<AuthScreen> {
     } on TimeoutException {
       setState(() {
         _errorMessage =
-            'El backend tardo demasiado en responder. Si el servicio estaba dormido, intenta nuevamente.';
+            'El backend tardó demasiado en responder. Puede estar despertando en Render. Intenta nuevamente en unos segundos.';
         _isLoading = false;
       });
     } on http.ClientException {
