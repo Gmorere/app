@@ -253,7 +253,6 @@ def expressive_writing_output(
         )
 
         return ExpressiveWritingResponse(
-            validation=str(result["validation"]),
             reflection=str(result["reflection"]),
             next_step=str(result["next_step"]),
             risk_level=str(result["risk_level"]),

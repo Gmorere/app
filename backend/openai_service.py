@@ -62,7 +62,6 @@ Recibiras:
 
 Debes responder SIEMPRE en JSON valido con esta estructura exacta:
 {
-  "validation": "string",
   "reflection": "string",
   "next_step": "string"
 }
@@ -71,9 +70,9 @@ Reglas:
 1. Espanol latino neutro.
 2. Se breve, claro y humano.
 3. No hagas terapia, no interpretes de mas.
-4. validation debe reconocer lo que aparece en el texto sin dramatizar.
-5. reflection debe nombrar que parece pesar mas o quedar mas presente.
-6. next_step debe ser una sola orientacion simple y accionable.
+4. reflection debe nombrar que parece pesar mas o quedar mas presente.
+5. next_step debe ser una sola orientacion simple y accionable.
+6. Cada campo debe ser una sola frase breve.
 7. No conviertas esto en chat.
 8. No uses frases vacias, coach ni autoayuda generica.
 9. Si hay alguna senal favorable real, puedes nombrarla en positivo.
@@ -567,7 +566,6 @@ def generate_expressive_writing_output(
 
     if risk_screening == "high_risk":
         return {
-            "validation": "Lo que escribiste muestra un nivel de dolor que no quiero tomar a la ligera.",
             "reflection": "Ahora lo mas importante no es seguir profundizando por aqui, sino acercarte a apoyo humano.",
             "next_step": "Ve a apoyo ahora y toma contacto con una persona real o una linea de ayuda.",
             "risk_level": "crisis",
@@ -576,7 +574,6 @@ def generate_expressive_writing_output(
 
     if risk_screening == "vulnerability_high":
         return {
-            "validation": "Lo que escribiste suena a mucha carga acumulada y quiero tomarlo con cuidado.",
             "reflection": "Parece que esto ya no esta siendo solo una molestia puntual, sino algo que te esta sobrepasando.",
             "next_step": "Si puedes, busca apoyo humano visible ahora o usa una ayuda breve antes de seguir cargandote.",
             "risk_level": "vulnerability_high",
@@ -613,26 +610,23 @@ def generate_expressive_writing_output(
                     "type": "object",
                     "additionalProperties": False,
                     "properties": {
-                        "validation": {"type": "string"},
                         "reflection": {"type": "string"},
                         "next_step": {"type": "string"},
                     },
-                    "required": ["validation", "reflection", "next_step"],
+                    "required": ["reflection", "next_step"],
                 },
             }
         },
     )
 
     parsed = json.loads(response.output_text)
-    validation = str(parsed.get("validation", "")).strip()
     reflection = str(parsed.get("reflection", "")).strip()
     next_step = str(parsed.get("next_step", "")).strip()
 
-    if not validation or not reflection or not next_step:
+    if not reflection or not next_step:
         raise ValueError("La salida de escritura expresiva llego incompleta")
 
     return {
-        "validation": validation,
         "reflection": reflection,
         "next_step": next_step,
         "risk_level": "normal",

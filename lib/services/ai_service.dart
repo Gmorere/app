@@ -33,14 +33,12 @@ class AiResponse {
 }
 
 class ExpressiveWritingOutput {
-  final String validation;
   final String reflection;
   final String nextStep;
   final String riskLevel;
   final bool shouldOfferHumanSupport;
 
   const ExpressiveWritingOutput({
-    required this.validation,
     required this.reflection,
     required this.nextStep,
     required this.riskLevel,
@@ -325,13 +323,12 @@ class AiService {
       );
     }
 
-    final validation = (decoded['validation'] ?? '').toString().trim();
     final reflection = (decoded['reflection'] ?? '').toString().trim();
     final nextStep = (decoded['next_step'] ?? '').toString().trim();
     final riskLevel = (decoded['risk_level'] ?? '').toString().trim().toLowerCase();
     final shouldOfferHumanSupport = decoded['should_offer_human_support'] == true;
 
-    if (validation.isEmpty || reflection.isEmpty || nextStep.isEmpty) {
+    if (reflection.isEmpty || nextStep.isEmpty) {
       throw Exception('La salida breve llego incompleta.');
     }
 
@@ -340,7 +337,6 @@ class AiService {
     }
 
     return ExpressiveWritingOutput(
-      validation: validation,
       reflection: reflection,
       nextStep: nextStep,
       riskLevel: riskLevel,

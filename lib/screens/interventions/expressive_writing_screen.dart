@@ -314,11 +314,6 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
         ),
         const SizedBox(height: 20),
         _buildResultCard(
-          title: "Lo que aparece aqui",
-          body: result.validation,
-        ),
-        const SizedBox(height: 14),
-        _buildResultCard(
           title: "Lo que pesa mas",
           body: result.reflection,
         ),

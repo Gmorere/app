@@ -97,7 +97,6 @@ class ExpressiveWritingRequest(BaseModel):
 
 
 class ExpressiveWritingResponse(BaseModel):
-    validation: str
     reflection: str
     next_step: str
     risk_level: AllowedRisk
