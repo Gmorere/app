@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../core/backend_config.dart';
+import '../core/emotion_normalizer.dart';
 import '../core/intervention_type.dart';
 import 'intervention_selector.dart';
 
@@ -14,7 +15,9 @@ class AiResponse {
   final String recommendedCategory;
   final String recommendedTool;
   final String riskLevel;
+  final bool longitudinalConcern;
   final bool shouldOfferHumanSupport;
+  final String? dominantState;
 
   const AiResponse({
     required this.sessionId,
@@ -22,6 +25,24 @@ class AiResponse {
     required this.nextMessage,
     required this.recommendedCategory,
     required this.recommendedTool,
+    required this.riskLevel,
+    this.longitudinalConcern = false,
+    required this.shouldOfferHumanSupport,
+    this.dominantState,
+  });
+}
+
+class ExpressiveWritingOutput {
+  final String validation;
+  final String reflection;
+  final String nextStep;
+  final String riskLevel;
+  final bool shouldOfferHumanSupport;
+
+  const ExpressiveWritingOutput({
+    required this.validation,
+    required this.reflection,
+    required this.nextStep,
     required this.riskLevel,
     required this.shouldOfferHumanSupport,
   });
@@ -51,9 +72,11 @@ class SessionItem {
   final int id;
   final String emotion;
   final String intensity;
+  final String recommendedCategory;
   final String recommendedTool;
   final String riskLevel;
   final bool shouldOfferHumanSupport;
+  final String? dominantState;
   final bool? helped;
   final DateTime? createdAt;
 
@@ -61,9 +84,11 @@ class SessionItem {
     required this.id,
     required this.emotion,
     required this.intensity,
+    required this.recommendedCategory,
     required this.recommendedTool,
     required this.riskLevel,
     required this.shouldOfferHumanSupport,
+    required this.dominantState,
     required this.helped,
     required this.createdAt,
   });
@@ -73,14 +98,34 @@ class SessionItem {
       id: (json['id'] as num?)?.toInt() ?? 0,
       emotion: (json['emotion'] ?? '').toString(),
       intensity: (json['intensity'] ?? '').toString(),
+      recommendedCategory: (json['recommended_category'] ?? '').toString(),
       recommendedTool: (json['recommended_tool'] ?? '').toString(),
       riskLevel: (json['risk_level'] ?? '').toString(),
       shouldOfferHumanSupport: json['should_offer_human_support'] == true,
+      dominantState: _normalizeSessionDominantState(
+        (json['dominant_state'] ?? '').toString(),
+      ),
       helped: json['helped'] is bool ? json['helped'] as bool : null,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
     );
+  }
+
+  static String? _normalizeSessionDominantState(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+
+    const allowedStates = {
+      'hiperactivado',
+      'bloqueado',
+      'rumiativo',
+      'agotado',
+      'desconectado',
+      'desbordado',
+    };
+
+    return allowedStates.contains(normalized) ? normalized : null;
   }
 }
 
@@ -99,12 +144,20 @@ class AiService {
     'conversation',
     'breathing',
     'grounding',
+    'clench_fists',
+    'movement',
+    'sensory_pause',
     'reframe',
+    'expressive_writing',
     'micro_action',
     'support_path',
   };
 
-  static const Set<String> _validRiskLevels = {'low', 'medium', 'high'};
+  static const Set<String> _validRiskLevels = {
+    'normal',
+    'vulnerability_high',
+    'crisis',
+  };
 
   static Future<AiResponse> getConversationResponse({
     required String token,
@@ -113,6 +166,16 @@ class AiService {
     required String userMessage,
     String briefContext = '',
   }) async {
+    final immediateSafetyResponse = _buildImmediateSafetyResponse(
+      emotion: emotion,
+      intensity: intensity,
+      briefContext: briefContext,
+      userMessage: userMessage,
+    );
+    if (immediateSafetyResponse != null) {
+      return immediateSafetyResponse;
+    }
+
     try {
       return await _sendConversationRequest(
         token: token,
@@ -223,10 +286,106 @@ class AiService {
     }
   }
 
+  static Future<ExpressiveWritingOutput> generateExpressiveWritingOutput({
+    required String token,
+    required String writtenText,
+    String? emotion,
+    String? intensity,
+    String briefContext = '',
+  }) async {
+    final uri = Uri.parse('${BackendConfig.baseUrl}/armonia/expressive-writing');
+
+    final response = await http
+        .post(
+          uri,
+          headers: _buildHeaders(token),
+          body: jsonEncode({
+            'written_text': writtenText,
+            'emotion': emotion,
+            'intensity': intensity,
+            'brief_context': briefContext.trim(),
+          }),
+        )
+        .timeout(_timeout);
+
+    if (response.statusCode == 401) {
+      throw Exception('Tu sesion expiro. Ingresa nuevamente.');
+    }
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'No pude generar una salida breve para este texto en este momento.',
+      );
+    }
+
+    final dynamic decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception(
+        'La salida de escritura no llego en un formato valido.',
+      );
+    }
+
+    final validation = (decoded['validation'] ?? '').toString().trim();
+    final reflection = (decoded['reflection'] ?? '').toString().trim();
+    final nextStep = (decoded['next_step'] ?? '').toString().trim();
+    final riskLevel = (decoded['risk_level'] ?? '').toString().trim().toLowerCase();
+    final shouldOfferHumanSupport = decoded['should_offer_human_support'] == true;
+
+    if (validation.isEmpty || reflection.isEmpty || nextStep.isEmpty) {
+      throw Exception('La salida breve llego incompleta.');
+    }
+
+    if (!_validRiskLevels.contains(riskLevel)) {
+      throw Exception('La salida breve llego con un riesgo invalido.');
+    }
+
+    return ExpressiveWritingOutput(
+      validation: validation,
+      reflection: reflection,
+      nextStep: nextStep,
+      riskLevel: riskLevel,
+      shouldOfferHumanSupport: shouldOfferHumanSupport,
+    );
+  }
+
+  static AiResponse? _buildImmediateSafetyResponse({
+    required String emotion,
+    required String intensity,
+    required String briefContext,
+    required String userMessage,
+  }) {
+    final decision = InterventionSelector.select(
+      emotion: emotion,
+      intensity: intensity,
+      briefContext: briefContext,
+      userMessage: userMessage,
+    );
+
+    if (!decision.requiresSupportPath &&
+        decision.intervention != 'support_path') {
+      return null;
+    }
+
+    return AiResponse(
+      sessionId: 0,
+      validation: decision.validationMessage,
+      nextMessage:
+          'Quiero priorizar apoyo humano ahora mismo. No voy a seguir por chat con esto.',
+      recommendedCategory: 'support_path',
+      recommendedTool: 'support_path',
+      riskLevel: 'crisis',
+      longitudinalConcern: false,
+      shouldOfferHumanSupport: true,
+      dominantState: decision.dominantState,
+    );
+  }
+
   static Future<SessionFeedbackResponse> sendFeedback({
     required String token,
     required int sessionId,
     required bool helped,
+    bool? reliefFeedback,
+    bool? utilityFeedback,
   }) async {
     final uri = Uri.parse('${BackendConfig.baseUrl}/sessions/$sessionId/feedback');
 
@@ -234,7 +393,11 @@ class AiService {
         .post(
           uri,
           headers: _buildHeaders(token),
-          body: jsonEncode({'helped': helped}),
+          body: jsonEncode({
+            'helped': helped,
+            'relief_feedback': reliefFeedback,
+            'utility_feedback': utilityFeedback,
+          }),
         )
         .timeout(_timeout);
 
@@ -311,8 +474,8 @@ class AiService {
           body: jsonEncode({
             'user_message': userMessage,
             'brief_context': briefContext.trim(),
-            'emotion': _normalizeEmotion(emotion),
-            'intensity': _normalizeIntensity(intensity),
+            'emotion': EmotionNormalizer.toBackendEmotion(emotion),
+            'intensity': EmotionNormalizer.normalizeIntensity(intensity),
           }),
         )
         .timeout(_timeout);
@@ -367,14 +530,20 @@ class AiService {
     final normalizedCategory = _normalizeCategoryValue(rawCategory);
     final normalizedTool = _normalizeToolValue(rawTool);
     final rawRiskLevel = (json['risk_level'] ?? '').toString().trim().toLowerCase();
-    final riskLevel = _validRiskLevels.contains(rawRiskLevel) ? rawRiskLevel : 'low';
+    final riskLevel = _validRiskLevels.contains(rawRiskLevel)
+        ? rawRiskLevel
+        : 'normal';
+    final longitudinalConcern = json['longitudinal_concern'] == true;
     final shouldOfferHumanSupport = json['should_offer_human_support'] == true;
+    final dominantState = _normalizeDominantState(
+      (json['dominant_state'] ?? '').toString(),
+    );
 
     var effectiveCategory = normalizedCategory.isNotEmpty
         ? normalizedCategory
         : _mapLegacyToolToCategory(normalizedTool);
 
-    if (shouldOfferHumanSupport && riskLevel != 'low') {
+    if (shouldOfferHumanSupport && riskLevel == 'crisis') {
       effectiveCategory = 'support_path';
     }
 
@@ -406,7 +575,9 @@ class AiService {
       recommendedCategory: effectiveCategory,
       recommendedTool: effectiveTool,
       riskLevel: riskLevel,
+      longitudinalConcern: longitudinalConcern,
       shouldOfferHumanSupport: shouldOfferHumanSupport,
+      dominantState: dominantState,
     );
   }
 
@@ -435,9 +606,32 @@ class AiService {
           : calmMessage,
       recommendedCategory: category,
       recommendedTool: decision.intervention,
-      riskLevel: decision.requiresSupportPath ? 'high' : 'low',
-      shouldOfferHumanSupport: decision.requiresSupportPath,
+      riskLevel: decision.requiresSupportPath
+          ? 'crisis'
+          : decision.shouldOfferHumanSupport
+              ? 'vulnerability_high'
+              : 'normal',
+      longitudinalConcern: decision.longitudinalConcern,
+      shouldOfferHumanSupport:
+          decision.requiresSupportPath || decision.shouldOfferHumanSupport,
+      dominantState: decision.dominantState,
     );
+  }
+
+  static String? _normalizeDominantState(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) return null;
+
+    const allowedStates = {
+      'hiperactivado',
+      'bloqueado',
+      'rumiativo',
+      'agotado',
+      'desconectado',
+      'desbordado',
+    };
+
+    return allowedStates.contains(normalized) ? normalized : null;
   }
 
   static String _normalizeCategoryValue(String value) {
@@ -454,8 +648,12 @@ class AiService {
     switch (tool) {
       case 'breathing':
       case 'grounding':
+      case 'clench_fists':
+      case 'movement':
+      case 'sensory_pause':
         return 'physical_regulation';
       case 'reframe':
+      case 'expressive_writing':
         return 'mental_reframe';
       case 'micro_action':
         return 'concrete_action';
@@ -522,40 +720,5 @@ class AiService {
       'Accept': 'application/json',
       'Authorization': 'Bearer $token',
     };
-  }
-
-  static String _normalizeEmotion(String emotion) {
-    switch (emotion.toLowerCase().trim()) {
-      case 'triste':
-      case 'pena':
-      case 'tristeza':
-        return 'tristeza';
-      case 'bloqueo':
-      case 'bloqueado':
-        return 'bloqueado';
-      case 'enojo':
-      case 'molesto':
-      case 'rabia':
-        return 'rabia';
-      case 'sobrecarga':
-      case 'sobrepasado':
-      case 'general':
-        return 'sobrepasado';
-      case 'ansiedad':
-        return 'ansiedad';
-      default:
-        return 'sobrepasado';
-    }
-  }
-
-  static String _normalizeIntensity(String intensity) {
-    switch (intensity.toLowerCase().trim()) {
-      case 'bajo':
-      case 'medio':
-      case 'alto':
-        return intensity.toLowerCase().trim();
-      default:
-        return 'medio';
-    }
   }
 }

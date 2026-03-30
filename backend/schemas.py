@@ -9,7 +9,11 @@ AllowedTool = Literal[
     "conversation",
     "breathing",
     "grounding",
+    "clench_fists",
+    "movement",
+    "sensory_pause",
     "reframe",
+    "expressive_writing",
     "micro_action",
     "support_path",
 ]
@@ -20,7 +24,15 @@ AllowedCategory = Literal[
     "concrete_action",
     "support_path",
 ]
-AllowedRisk = Literal["low", "medium", "high"]
+AllowedRisk = Literal["normal", "vulnerability_high", "crisis"]
+AllowedDominantState = Literal[
+    "hiperactivado",
+    "bloqueado",
+    "rumiativo",
+    "agotado",
+    "desconectado",
+    "desbordado",
+]
 
 
 class RegisterRequest(BaseModel):
@@ -64,6 +76,7 @@ class ArmoniaResponse(BaseModel):
     recommended_tool: AllowedTool
     risk_level: AllowedRisk
     should_offer_human_support: bool
+    dominant_state: AllowedDominantState | None = None
 
 
 class ArmoniaResponsePayload(BaseModel):
@@ -73,10 +86,28 @@ class ArmoniaResponsePayload(BaseModel):
     recommended_tool: AllowedTool
     risk_level: AllowedRisk
     should_offer_human_support: bool
+    dominant_state: AllowedDominantState | None = None
+
+
+class ExpressiveWritingRequest(BaseModel):
+    written_text: str = Field(..., min_length=1, max_length=4000)
+    emotion: str | None = Field(default=None, max_length=80)
+    intensity: str | None = Field(default=None, max_length=40)
+    brief_context: str = Field(default="", max_length=4000)
+
+
+class ExpressiveWritingResponse(BaseModel):
+    validation: str
+    reflection: str
+    next_step: str
+    risk_level: AllowedRisk
+    should_offer_human_support: bool
 
 
 class SessionFeedbackRequest(BaseModel):
-    helped: bool
+    helped: bool | None = None
+    relief_feedback: bool | None = None
+    utility_feedback: bool | None = None
 
 
 class SessionFeedbackResponse(BaseModel):
@@ -89,9 +120,11 @@ class SessionItem(BaseModel):
     id: int
     emotion: AllowedEmotion
     intensity: AllowedIntensity
+    recommended_category: AllowedCategory | None = None
     recommended_tool: AllowedTool
     risk_level: AllowedRisk
     should_offer_human_support: bool
+    dominant_state: AllowedDominantState | None = None
     helped: bool | None = None
     created_at: datetime
 

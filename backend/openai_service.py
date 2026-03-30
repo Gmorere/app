@@ -42,7 +42,7 @@ Reglas:
 4. No uses lenguaje clinico innecesario.
 5. validation debe validar sin exagerar.
 6. next_message debe ser una sola guia breve y accionable.
-7. Si el riesgo es medium o high, prioriza contencion, apoyo humano y claridad.
+7. Si el riesgo es vulnerability_high o crisis, prioriza contencion, apoyo humano y claridad.
 8. Si la categoria es support_path, no abras exploracion larga ni pidas seguir profundizando por chat.
 9. Si la categoria es physical_regulation, orienta a bajar activacion o volver al cuerpo.
 10. Si la categoria es mental_reframe, orienta a abrir otra mirada sin sonar abstracto.
@@ -51,13 +51,50 @@ Reglas:
 13. No agregues texto fuera del JSON.
 """
 
-AllowedRiskScreening = Literal["safe", "ambiguous_risk", "high_risk"]
+EXPRESSIVE_WRITING_SYSTEM_PROMPT = """
+Eres la capa de salida breve de escritura expresiva de ArmonIA.
+No eres un chatbot generico. No abras conversacion larga.
+
+Recibiras:
+- texto escrito por el usuario
+- emocion e intensidad opcionales
+- contexto breve opcional
+
+Debes responder SIEMPRE en JSON valido con esta estructura exacta:
+{
+  "validation": "string",
+  "reflection": "string",
+  "next_step": "string"
+}
+
+Reglas:
+1. Espanol latino neutro.
+2. Se breve, claro y humano.
+3. No hagas terapia, no interpretes de mas.
+4. validation debe reconocer lo que aparece en el texto sin dramatizar.
+5. reflection debe nombrar que parece pesar mas o quedar mas presente.
+6. next_step debe ser una sola orientacion simple y accionable.
+7. No conviertas esto en chat.
+8. No uses frases vacias, coach ni autoayuda generica.
+9. Si hay alguna senal favorable real, puedes nombrarla en positivo.
+10. No agregues texto fuera del JSON.
+"""
+
+AllowedRiskScreening = Literal["safe", "vulnerability_high", "high_risk"]
 AllowedCategory = Literal[
     "conversation",
     "physical_regulation",
     "mental_reframe",
     "concrete_action",
     "support_path",
+]
+AllowedDominantState = Literal[
+    "hiperactivado",
+    "bloqueado",
+    "rumiativo",
+    "agotado",
+    "desconectado",
+    "desbordado",
 ]
 
 HIGH_RISK_PATTERNS = [
@@ -114,6 +151,12 @@ AMBIGUOUS_RISK_PATTERNS = [
     r"\bquisiera dejar de pensar\b",
     r"\bno doy mas\b",
     r"\bno puedo mas\b",
+    r"\bya no doy mas\b",
+    r"\bya no puedo mas\b",
+    r"\bya no aguanto mas\b",
+    r"\bno aguanto mas\b",
+    r"\bno lo soporto mas\b",
+    r"\bya no lo soporto mas\b",
     r"\bestoy agotad[oa] de todo\b",
     r"\bestoy cansad[oa] de todo\b",
     r"\bquiero dormir varios dias\b",
@@ -163,7 +206,7 @@ def screen_risk(user_message: str) -> AllowedRiskScreening:
     if matches_any(text, HIGH_RISK_PATTERNS):
         return "high_risk"
     if matches_any(text, AMBIGUOUS_RISK_PATTERNS) or has_ambiguous_escape_language(text):
-        return "ambiguous_risk"
+        return "vulnerability_high"
     return "safe"
 
 
@@ -171,11 +214,54 @@ def build_risk_source_text(data: ArmoniaRequest) -> str:
     return normalize_text(f"{data.brief_context} {data.user_message}")
 
 
+def infer_dominant_state(data: ArmoniaRequest) -> AllowedDominantState | None:
+    text = build_risk_source_text(data)
+    if not text:
+        return None
+
+    if data.emotion == "ansiedad":
+        if any(fragment in text for fragment in ["pensar", "vueltas", "cabeza", "mente"]):
+            return "rumiativo"
+        if any(fragment in text for fragment in ["acelerad", "agita", "tembl", "pecho", "taquic", "nervios"]):
+            return "hiperactivado"
+        return None
+
+    if data.emotion == "bloqueado":
+        if any(fragment in text for fragment in ["paraliz", "congel", "trabado", "no puedo empezar", "no me sale"]):
+            return "bloqueado"
+        return None
+
+    if data.emotion == "rabia":
+        if any(fragment in text for fragment in ["sin energia", "agotado", "cansado"]):
+            return "agotado"
+        if any(fragment in text for fragment in ["gritar", "explota", "furia", "tenso"]):
+            return "hiperactivado"
+        return None
+
+    if data.emotion == "tristeza":
+        if any(fragment in text for fragment in ["desconect", "vacio", "nada siento"]):
+            return "desconectado"
+        if data.intensity == "alto" and any(
+            fragment in text for fragment in ["agotado", "cansado", "sin energia", "pesad"]
+        ):
+            return "agotado"
+        return None
+
+    if data.emotion == "sobrepasado":
+        if any(fragment in text for fragment in ["agotado", "cansado", "sin energia"]):
+            return "agotado"
+        if any(fragment in text for fragment in ["desbord", "saturad", "sobrepas", "no puedo mas", "no doy mas"]):
+            return "desbordado"
+        return None
+
+    return None
+
+
 def tool_to_category(tool: str) -> AllowedCategory:
     normalized = (tool or "").strip().lower()
-    if normalized in {"breathing", "grounding"}:
+    if normalized in {"breathing", "grounding", "clench_fists", "movement", "sensory_pause"}:
         return "physical_regulation"
-    if normalized == "reframe":
+    if normalized in {"reframe", "expressive_writing"}:
         return "mental_reframe"
     if normalized == "micro_action":
         return "concrete_action"
@@ -236,21 +322,68 @@ Devuelve el JSON exacto pedido.
 """.strip()
 
 
-def build_crisis_response(risk_level: str) -> ArmoniaResponsePayload:
-    if risk_level == "high":
-        validation = "Lo que estas expresando me importa y no quiero tomarlo a la ligera."
-        next_message = "Quiero llevarte a apoyo humano ahora mismo. No voy a seguir profundizando esto por chat."
-    else:
-        validation = "Lo que dices suena a un nivel de agotamiento o desconexion que quiero tomar con mucho cuidado."
-        next_message = "Quiero priorizar apoyo humano contigo ahora, antes de seguir con cualquier otra cosa."
+def build_expressive_writing_prompt(
+    written_text: str,
+    emotion: str | None,
+    intensity: str | None,
+    brief_context: str,
+) -> str:
+    return f"""
+Contexto opcional:
+- emocion: {emotion or 'sin dato'}
+- intensidad: {intensity or 'sin dato'}
+- contexto breve: {brief_context or 'sin contexto'}
+
+Texto escrito por el usuario:
+{written_text}
+
+Devuelve el JSON exacto pedido.
+""".strip()
+
+
+def choose_vulnerability_category(
+    data: ArmoniaRequest,
+    recent_history: list[dict],
+) -> AllowedCategory:
+    base_category = choose_category(data, recent_history)
+    dominant_state = infer_dominant_state(data)
+
+    if base_category == "mental_reframe":
+        return "conversation"
+
+    if dominant_state in {"hiperactivado", "desbordado"} and base_category == "conversation":
+        return "physical_regulation"
+
+    return base_category
+
+
+def build_vulnerability_response(
+    data: ArmoniaRequest,
+    recent_history: list[dict],
+) -> ArmoniaResponsePayload:
+    category = choose_vulnerability_category(data, recent_history)
+    dominant_state = infer_dominant_state(data)
 
     return ArmoniaResponsePayload(
-        validation=validation,
-        next_message=next_message,
+        validation="Lo que dices suena a un nivel de agotamiento o desesperanza que quiero tomar con mucho cuidado.",
+        next_message="No quiero cargarte con demasiado ahora. Voy a proponerte una ayuda breve y tambien voy a dejarte apoyo humano visible por si lo necesitas.",
+        recommended_category=category,
+        recommended_tool=category_to_legacy_tool(category, data.emotion, data.intensity),
+        risk_level="vulnerability_high",
+        should_offer_human_support=True,
+        dominant_state=dominant_state,
+    )
+
+
+def build_crisis_response() -> ArmoniaResponsePayload:
+    return ArmoniaResponsePayload(
+        validation="Lo que estas expresando me importa y no quiero tomarlo a la ligera.",
+        next_message="Quiero llevarte a apoyo humano ahora mismo. No voy a seguir profundizando esto por chat.",
         recommended_category="support_path",
         recommended_tool="support_path",
-        risk_level=risk_level,
+        risk_level="crisis",
         should_offer_human_support=True,
+        dominant_state=None,
     )
 
 
@@ -276,8 +409,13 @@ def choose_category(
     recent_history: list[dict],
 ) -> AllowedCategory:
     helpful_categories = get_helpful_categories(recent_history, data.emotion, data.intensity)
+    dominant_state = infer_dominant_state(data)
 
     if data.emotion == "ansiedad":
+        if dominant_state == "rumiativo":
+            if data.intensity == "alto":
+                return "conversation"
+            return "mental_reframe"
         if data.intensity in {"alto", "medio"}:
             if "conversation" in helpful_categories and data.intensity == "medio":
                 return "conversation"
@@ -287,6 +425,8 @@ def choose_category(
         return "conversation"
 
     if data.emotion == "sobrepasado":
+        if dominant_state == "agotado":
+            return "conversation" if data.intensity == "alto" else "concrete_action"
         if data.intensity == "alto":
             return "concrete_action"
         if data.intensity == "medio":
@@ -312,6 +452,8 @@ def choose_category(
         return "conversation"
 
     if data.emotion == "tristeza":
+        if dominant_state == "desconectado" and data.intensity != "alto":
+            return "conversation"
         if data.intensity == "alto":
             return "conversation"
         if data.intensity == "medio":
@@ -386,18 +528,19 @@ def generate_copy(
 
 def generate_armonia_response(data: ArmoniaRequest, recent_history: list[dict]) -> ArmoniaResponsePayload:
     risk_screening = screen_risk(build_risk_source_text(data))
+    dominant_state = infer_dominant_state(data)
 
     if risk_screening == "high_risk":
-        return build_crisis_response("high")
+        return build_crisis_response()
 
-    if risk_screening == "ambiguous_risk":
-        return build_crisis_response("medium")
+    if risk_screening == "vulnerability_high":
+        return build_vulnerability_response(data, recent_history)
 
     category = choose_category(data, recent_history)
     copy = generate_copy(
         data=data,
         category=category,
-        risk_level="low",
+        risk_level="normal",
         recent_history=recent_history,
     )
 
@@ -406,6 +549,92 @@ def generate_armonia_response(data: ArmoniaRequest, recent_history: list[dict]) 
         next_message=copy["next_message"],
         recommended_category=category,
         recommended_tool=category_to_legacy_tool(category, data.emotion, data.intensity),
-        risk_level="low",
+        risk_level="normal",
         should_offer_human_support=False,
+        dominant_state=dominant_state,
     )
+
+
+def generate_expressive_writing_output(
+    *,
+    written_text: str,
+    emotion: str | None = None,
+    intensity: str | None = None,
+    brief_context: str = "",
+) -> dict[str, str | bool]:
+    normalized_text = normalize_text(f"{brief_context} {written_text}")
+    risk_screening = screen_risk(normalized_text)
+
+    if risk_screening == "high_risk":
+        return {
+            "validation": "Lo que escribiste muestra un nivel de dolor que no quiero tomar a la ligera.",
+            "reflection": "Ahora lo mas importante no es seguir profundizando por aqui, sino acercarte a apoyo humano.",
+            "next_step": "Ve a apoyo ahora y toma contacto con una persona real o una linea de ayuda.",
+            "risk_level": "crisis",
+            "should_offer_human_support": True,
+        }
+
+    if risk_screening == "vulnerability_high":
+        return {
+            "validation": "Lo que escribiste suena a mucha carga acumulada y quiero tomarlo con cuidado.",
+            "reflection": "Parece que esto ya no esta siendo solo una molestia puntual, sino algo que te esta sobrepasando.",
+            "next_step": "Si puedes, busca apoyo humano visible ahora o usa una ayuda breve antes de seguir cargandote.",
+            "risk_level": "vulnerability_high",
+            "should_offer_human_support": True,
+        }
+
+    response = client.responses.create(
+        model=MODEL_NAME,
+        input=[
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": EXPRESSIVE_WRITING_SYSTEM_PROMPT}],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": build_expressive_writing_prompt(
+                            written_text=written_text,
+                            emotion=emotion,
+                            intensity=intensity,
+                            brief_context=brief_context,
+                        ),
+                    }
+                ],
+            },
+        ],
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": "expressive_writing_response",
+                "schema": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "validation": {"type": "string"},
+                        "reflection": {"type": "string"},
+                        "next_step": {"type": "string"},
+                    },
+                    "required": ["validation", "reflection", "next_step"],
+                },
+            }
+        },
+    )
+
+    parsed = json.loads(response.output_text)
+    validation = str(parsed.get("validation", "")).strip()
+    reflection = str(parsed.get("reflection", "")).strip()
+    next_step = str(parsed.get("next_step", "")).strip()
+
+    if not validation or not reflection or not next_step:
+        raise ValueError("La salida de escritura expresiva llego incompleta")
+
+    return {
+        "validation": validation,
+        "reflection": reflection,
+        "next_step": next_step,
+        "risk_level": "normal",
+        "should_offer_human_support": False,
+    }
