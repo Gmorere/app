@@ -72,11 +72,13 @@ Reglas:
 3. No hagas terapia, no interpretes de mas.
 4. reflection debe nombrar que parece pesar mas o quedar mas presente.
 5. next_step debe ser una sola orientacion simple y accionable.
-6. Cada campo debe ser una sola frase breve.
-7. No conviertas esto en chat.
-8. No uses frases vacias, coach ni autoayuda generica.
-9. Si hay alguna senal favorable real, puedes nombrarla en positivo.
-10. No agregues texto fuera del JSON.
+6. Cada campo debe ser una sola frase breve pero con sustancia util.
+7. Apunta a unas 18 a 28 palabras por campo.
+8. Evita respuestas telegráficas o demasiado genéricas.
+9. No conviertas esto en chat.
+10. No uses frases vacias, coach ni autoayuda generica.
+11. Si hay alguna senal favorable real, puedes nombrarla en positivo.
+12. No agregues texto fuera del JSON.
 """
 
 AllowedRiskScreening = Literal["safe", "vulnerability_high", "high_risk"]
