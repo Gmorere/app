@@ -303,7 +303,56 @@ def has_high_risk_fragments(text: str) -> bool:
         ]
     )
 
-    return (self_harm_intent and self_harm_targets) or violence_targets
+    third_party_subject = any(
+        fragment in normalized
+        for fragment in [
+            " otra persona ",
+            " un amigo ",
+            " una amiga ",
+            " mi amigo ",
+            " mi amiga ",
+            " mi pareja ",
+            " mi hijo ",
+            " mi hija ",
+            " mi hermano ",
+            " mi hermana ",
+            " alguien ",
+        ]
+    )
+
+    third_party_intent = any(
+        fragment in normalized
+        for fragment in [
+            " quiere ",
+            " quiere saber ",
+            " recomendaciones ",
+            " que recomendaciones ",
+            " consejos ",
+            " opciones ",
+            " formas ",
+            " maneras ",
+            " como ",
+            " ayudar ",
+            " ayuda para ",
+        ]
+    )
+
+    third_party_targets = any(
+        fragment in normalized
+        for fragment in [
+            " matarse",
+            " suicid",
+            " quitarse la vida",
+            " terminar con todo",
+            " terminar con su vida",
+            " acabar con su vida",
+            " morir",
+        ]
+    )
+
+    third_party_high_risk = third_party_subject and third_party_intent and third_party_targets
+
+    return (self_harm_intent and self_harm_targets) or violence_targets or third_party_high_risk
 
 
 def matches_any(text: str, patterns: list[str]) -> bool:
