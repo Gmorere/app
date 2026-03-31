@@ -218,6 +218,8 @@ HIGH_RISK_PATTERNS = [
     r"\bpuedes ayudarme a suicidarme\b",
     r"\bquiero ayuda para suicidarme\b",
     r"\bsuicidarme\b",
+    r"\bterminar con mi sufrimiento\b",
+    r"\bacabar con mi sufrimiento\b",
     r"\bseria mejor no despertar\b",
     r"\bojala no despertar\b",
     r"\bno quiero despertar\b",
@@ -425,6 +427,10 @@ def has_high_risk_fragments(text: str) -> bool:
             " terminar con todo",
             " terminar con su vida",
             " acabar con su vida",
+            " terminar con su sufrimiento",
+            " terminar con el sufrimiento",
+            " acabar con su sufrimiento",
+            " acabar con el sufrimiento",
             " morir",
         ]
     )

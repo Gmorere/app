@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../content/expressive_writing_content.dart';
@@ -142,6 +144,15 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
       'me quiero morir',
       'quiero matarte',
       'te voy a matar',
+      'otra persona que quiere matarse',
+      'alguien quiere matarse',
+      'otra persona quiere matarse',
+      'otra persona quiere suicidarse',
+      'alguien quiere suicidarse',
+      'termine con su sufrimiento',
+      'termine con el sufrimiento',
+      'acabe con su sufrimiento',
+      'acabe con el sufrimiento',
     };
 
     if (criticalPhrases.any(normalized.contains)) {
@@ -181,7 +192,31 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
       'hacerle dano a alguien',
     ].any(normalized.contains);
 
-    return (selfHarmIntent && selfHarmTarget) || violenceTarget;
+    final thirdPartyRisk = [
+      'otra persona',
+      'alguien',
+      'mi pareja',
+      'mi hijo',
+      'mi hija',
+      'mi hermano',
+      'mi hermana',
+      'mi amigo',
+      'mi amiga',
+    ].any(normalized.contains) &&
+        [
+          'matarse',
+          'suicid',
+          'quitarse la vida',
+          'terminar con todo',
+          'terminar con su vida',
+          'acabar con su vida',
+          'terminar con su sufrimiento',
+          'terminar con el sufrimiento',
+          'acabar con su sufrimiento',
+          'acabar con el sufrimiento',
+        ].any(normalized.contains);
+
+    return (selfHarmIntent && selfHarmTarget) || violenceTarget || thirdPartyRisk;
   }
 
   bool _resultSuggestsHumanSupport(ExpressiveWritingOutput result) {
@@ -266,6 +301,7 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
         writtenText: writtenText,
         emotion: _normalizedEmotion(),
         intensity: _normalizedIntensity(),
+        interventionOrigin: widget.interventionOrigin,
       );
 
       if (!mounted) return;
@@ -278,8 +314,22 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
       setState(() {
         _result = output;
       });
+    } on TimeoutException {
+      if (!mounted) return;
+      if (_hasCriticalRiskLanguage(writtenText)) {
+        _goToSupportPath(writtenText, 'crisis');
+        return;
+      }
+      setState(() {
+        _errorMessage =
+            'No pude completar esta respuesta a tiempo. Si esto es urgente, ve a apoyo ahora.';
+      });
     } catch (e) {
       if (!mounted) return;
+      if (_hasCriticalRiskLanguage(writtenText)) {
+        _goToSupportPath(writtenText, 'crisis');
+        return;
+      }
       setState(() {
         _errorMessage = e.toString().replaceFirst('Exception: ', '').trim();
       });
