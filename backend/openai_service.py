@@ -103,12 +103,24 @@ HIGH_RISK_PATTERNS = [
     r"\bquiero matarme\b",
     r"\bvoy a matarme\b",
     r"\bme voy a matar\b",
+    r"\bquiero matarme a mi mismo\b",
+    r"\bquiero matarme a mi misma\b",
+    r"\bquiero matarme yo\b",
+    r"\bcomo puedo matarme\b",
+    r"\bcomo podria matarme\b",
+    r"\bcomo matarme\b",
+    r"\bme puedes ayudar a matarme\b",
+    r"\bpuedes ayudarme a matarme\b",
+    r"\bquiero ayuda para matarme\b",
     r"\bquiero morir\b",
     r"\bme quiero morir\b",
     r"\bquisiera morirme\b",
     r"\bme gustaria morirme\b",
     r"\bno quiero vivir\b",
+    r"\bno quiero vivir mas\b",
     r"\bno quiero seguir\b",
+    r"\bno quiero seguir viviendo\b",
+    r"\bno quiero seguir con vida\b",
     r"\bno quiero existir\b",
     r"\bquisiera desaparecer para siempre\b",
     r"\bquiero desaparecer para siempre\b",
@@ -116,6 +128,19 @@ HIGH_RISK_PATTERNS = [
     r"\bya no quiero estar aqui\b",
     r"\bquiero acabar con todo\b",
     r"\bquiero terminar con todo\b",
+    r"\bquiero terminar con mi vida\b",
+    r"\bquiero acabar con mi vida\b",
+    r"\bquiero quitarme la vida\b",
+    r"\bquisiera quitarme la vida\b",
+    r"\bme gustaria quitarme la vida\b",
+    r"\bvoy a quitarme la vida\b",
+    r"\bme voy a quitar la vida\b",
+    r"\bcomo puedo quitarme la vida\b",
+    r"\bcomo podria quitarme la vida\b",
+    r"\bcomo quitarme la vida\b",
+    r"\bme puedes ayudar a quitarme la vida\b",
+    r"\bpuedes ayudarme a quitarme la vida\b",
+    r"\bquiero ayuda para quitarme la vida\b",
     r"\bquiero hacerme dano\b",
     r"\bme quiero hacerme dano\b",
     r"\bme quiero hacer dano\b",
@@ -124,10 +149,29 @@ HIGH_RISK_PATTERNS = [
     r"\bquiero suicidarme\b",
     r"\bvoy a suicidarme\b",
     r"\bme voy a suicidar\b",
+    r"\bcomo puedo suicidarme\b",
+    r"\bcomo podria suicidarme\b",
+    r"\bcomo suicidarme\b",
+    r"\bme puedes ayudar a suicidarme\b",
+    r"\bpuedes ayudarme a suicidarme\b",
+    r"\bquiero ayuda para suicidarme\b",
     r"\bsuicidarme\b",
     r"\bseria mejor no despertar\b",
     r"\bojala no despertar\b",
     r"\bno quiero despertar\b",
+]
+
+VIOLENCE_TO_OTHERS_PATTERNS = [
+    r"\bquiero matarte\b",
+    r"\bte quiero matar\b",
+    r"\bvoy a matarte\b",
+    r"\bte voy a matar\b",
+    r"\bquiero matar a alguien\b",
+    r"\bquiero matar a una persona\b",
+    r"\bquiero hacerle dano a alguien\b",
+    r"\bquiero hacer dano a alguien\b",
+    r"\bquiero lastimar a alguien\b",
+    r"\bquiero herir a alguien\b",
 ]
 
 AMBIGUOUS_RISK_PATTERNS = [
@@ -185,7 +229,81 @@ EXPLICIT_DENIAL_PATTERNS = [
 def normalize_text(text: str) -> str:
     raw = (text or "").strip().lower()
     without_accents = unicodedata.normalize("NFKD", raw).encode("ascii", "ignore").decode("ascii")
-    return " ".join(without_accents.split())
+    collapsed_spaces = " ".join(without_accents.split())
+    softened = re.sub(r"(.)\1{2,}", r"\1", collapsed_spaces)
+    replacements = {
+        " q ": " que ",
+        " xq ": " porque ",
+        " kiero ": " quiero ",
+        " kiero.": " quiero.",
+        " kiero,": " quiero,",
+        " qiero ": " quiero ",
+        " qiero.": " quiero.",
+        " qiero,": " quiero,",
+        " qitarme ": " quitarme ",
+        " qitarme.": " quitarme.",
+        " qitarme,": " quitarme,",
+        " matarm ": " matarme ",
+        " matarmee ": " matarme ",
+        " matarmeee ": " matarme ",
+        " suicidarm ": " suicidarme ",
+        " suicidarmee ": " suicidarme ",
+        " suicidarmeee ": " suicidarme ",
+        " vivirr ": " vivir ",
+        " vidaa ": " vida ",
+    }
+    normalized = f" {softened} "
+    for source, target in replacements.items():
+        normalized = normalized.replace(source, target)
+    return " ".join(normalized.split())
+
+
+def has_high_risk_fragments(text: str) -> bool:
+    normalized = f" {text} "
+
+    self_harm_intent = any(
+        fragment in normalized
+        for fragment in [
+            " quiero ",
+            " me quiero ",
+            " voy a ",
+            " me voy a ",
+            " ayuda para ",
+            " ayudar a ",
+            " como ",
+            " no quiero ",
+            " no quiero seguir ",
+        ]
+    )
+
+    self_harm_targets = any(
+        fragment in normalized
+        for fragment in [
+            " matarm",
+            " suicid",
+            " quitarme la vida",
+            " terminar con mi vida",
+            " acabar con mi vida",
+            " morir",
+            " seguir viviendo",
+            " seguir con vida",
+        ]
+    )
+
+    violence_targets = any(
+        fragment in normalized
+        for fragment in [
+            " matarte",
+            " matar a alguien",
+            " matar a una persona",
+            " lastimar a alguien",
+            " herir a alguien",
+            " hacer dano a alguien",
+            " hacerle dano a alguien",
+        ]
+    )
+
+    return (self_harm_intent and self_harm_targets) or violence_targets
 
 
 def matches_any(text: str, patterns: list[str]) -> bool:
@@ -204,7 +322,11 @@ def screen_risk(user_message: str) -> AllowedRiskScreening:
         return "safe"
     if matches_any(text, EXPLICIT_DENIAL_PATTERNS):
         return "safe"
-    if matches_any(text, HIGH_RISK_PATTERNS):
+    if (
+        matches_any(text, HIGH_RISK_PATTERNS)
+        or matches_any(text, VIOLENCE_TO_OTHERS_PATTERNS)
+        or has_high_risk_fragments(text)
+    ):
         return "high_risk"
     if matches_any(text, AMBIGUOUS_RISK_PATTERNS) or has_ambiguous_escape_language(text):
         return "vulnerability_high"

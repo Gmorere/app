@@ -93,6 +93,121 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
     return riskLevel == 'crisis' ? 'alto' : 'medio';
   }
 
+  String _normalizeRiskText(String text) {
+    return text
+        .toLowerCase()
+        .trim()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ñ', 'n')
+        .replaceAll(RegExp(r'(.)\1{2,}'), r'$1')
+        .replaceAll('kero', 'quiero')
+        .replaceAll('kiero', 'quiero')
+        .replaceAll('qiero', 'quiero')
+        .replaceAll('qitarme', 'quitarme')
+        .replaceAll('matarmee', 'matarme')
+        .replaceAll('suicidarmee', 'suicidarme')
+        .replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  bool _hasCriticalRiskLanguage(String text) {
+    final normalized = _normalizeRiskText(text);
+    if (normalized.isEmpty) return false;
+
+    const criticalPhrases = {
+      'me quiero matar',
+      'quiero matarme',
+      'tengo ganas de matarme',
+      'quiero quitarme la vida',
+      'quiero acabar con mi vida',
+      'quiero terminar con mi vida',
+      'quiero suicidarme',
+      'pienso en matarme',
+      'pienso en suicidarme',
+      'como matarme',
+      'como suicidarme',
+      'como quitarme la vida',
+      'me puedes ayudar a matarme',
+      'me puedes ayudar a suicidarme',
+      'me puedes ayudar a quitarme la vida',
+      'quiero terminar con todo',
+      'tengo ganas de terminar con todo',
+      'no quiero vivir',
+      'no quiero vivir mas',
+      'no quiero seguir viviendo',
+      'quiero morir',
+      'me quiero morir',
+      'quiero matarte',
+      'te voy a matar',
+    };
+
+    if (criticalPhrases.any(normalized.contains)) {
+      return true;
+    }
+
+    final selfHarmIntent = [
+      'quiero',
+      'me quiero',
+      'tengo ganas de',
+      'como',
+      'ayudar',
+      'ayuda para',
+      'opciones',
+      'formas',
+      'maneras',
+      'mejores opciones',
+    ].any(normalized.contains);
+
+    final selfHarmTarget = [
+      'matarme',
+      'suicid',
+      'quitarme la vida',
+      'terminar con mi vida',
+      'acabar con mi vida',
+      'morirme',
+      'morir',
+    ].any(normalized.contains);
+
+    final violenceTarget = [
+      'matarte',
+      'matar a alguien',
+      'matar a una persona',
+      'lastimar a alguien',
+      'herir a alguien',
+      'hacer dano a alguien',
+      'hacerle dano a alguien',
+    ].any(normalized.contains);
+
+    return (selfHarmIntent && selfHarmTarget) || violenceTarget;
+  }
+
+  bool _resultSuggestsHumanSupport(ExpressiveWritingOutput result) {
+    final combined = _normalizeRiskText(
+      '${result.reflection} ${result.nextStep}',
+    );
+
+    const supportSignals = [
+      'apoyo humano',
+      'persona real',
+      'contacta a alguien',
+      'contactar a alguien',
+      'busca apoyo',
+      'buscar apoyo',
+      'linea de ayuda',
+      'linea de apoyo',
+      'fono ayuda',
+      've a apoyo ahora',
+      'acercarte a apoyo',
+      'habla con alguien',
+      'hablar con alguien',
+    ];
+
+    return supportSignals.any(combined.contains);
+  }
+
   void _finish() {
     Navigator.pushReplacement(
       context,
@@ -135,6 +250,11 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
       return;
     }
 
+    if (_hasCriticalRiskLanguage(writtenText)) {
+      _goToSupportPath(writtenText, 'crisis');
+      return;
+    }
+
     setState(() {
       _isGenerating = true;
       _errorMessage = null;
@@ -150,7 +270,7 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
 
       if (!mounted) return;
 
-      if (output.riskLevel == 'crisis') {
+      if (output.riskLevel == 'crisis' || output.shouldOfferHumanSupport) {
         _goToSupportPath(writtenText, output.riskLevel);
         return;
       }
@@ -206,16 +326,6 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
             child: Column(
               children: [
                 Text(
-                  content.intro,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    color: Colors.black54,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Text(
                   content.prompt,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
@@ -227,8 +337,8 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
                 const SizedBox(height: 18),
                 TextField(
                   controller: _textController,
-                  maxLines: 8,
-                  minLines: 8,
+                  maxLines: 6,
+                  minLines: 5,
                   textCapitalization: TextCapitalization.sentences,
                   decoration: InputDecoration(
                     hintText: content.placeholder,
@@ -256,6 +366,26 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
           if (_errorMessage != null) ...[
             const SizedBox(height: 16),
             _buildErrorCard(_errorMessage!),
+          ],
+          if (_isGenerating) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8F3FD),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Text(
+                "Generando una salida breve. Esto puede tardar unos segundos.",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.black54,
+                  height: 1.35,
+                ),
+              ),
+            ),
           ],
           const SizedBox(height: 24),
           Text(
@@ -303,6 +433,11 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
   }
 
   Widget _buildResultStage(ExpressiveWritingOutput result) {
+    final shouldDivertToSupport =
+        result.riskLevel == 'crisis' ||
+        result.shouldOfferHumanSupport ||
+        _resultSuggestsHumanSupport(result);
+
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -322,7 +457,7 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
           title: "Siguiente paso simple",
           body: result.nextStep,
         ),
-        if (result.shouldOfferHumanSupport) ...[
+        if (shouldDivertToSupport) ...[
           const SizedBox(height: 18),
           SizedBox(
             height: 54,
@@ -334,27 +469,28 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
               child: const Text("Ver apoyo ahora"),
             ),
           ),
-        ],
-        const SizedBox(height: 18),
-        SizedBox(
-          height: 54,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _primaryColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+        ] else ...[
+          const SizedBox(height: 18),
+          SizedBox(
+            height: 54,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
-            ),
-            onPressed: _finish,
-            child: const Text(
-              "Seguir",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white,
+              onPressed: _finish,
+              child: const Text(
+                "Seguir",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
-        ),
+        ],
         const SizedBox(height: 12),
         TextButton(
           onPressed: _resetWriting,
