@@ -254,21 +254,28 @@ def expressive_writing_output(
             brief_context=payload.brief_context,
         )
 
-        signal = ExpressiveWritingSignalRecord(
-            user_id=current_user.id,
-            emotion=payload.emotion,
-            intensity=payload.intensity,
-            intervention_origin=payload.intervention_origin,
-            reflection=str(result["reflection"]),
-            next_step=str(result["next_step"]),
-            context_tag=str(result["context_tag"]),
-            possible_theme=str(result["possible_theme"]),
-            theme_confidence=str(result["theme_confidence"]),
-            risk_level=str(result["risk_level"]),
-            should_offer_human_support=bool(result["should_offer_human_support"]),
-        )
-        db.add(signal)
-        db.commit()
+        try:
+            signal = ExpressiveWritingSignalRecord(
+                user_id=current_user.id,
+                emotion=payload.emotion,
+                intensity=payload.intensity,
+                intervention_origin=payload.intervention_origin,
+                reflection=str(result["reflection"]),
+                next_step=str(result["next_step"]),
+                context_tag=str(result["context_tag"]),
+                possible_theme=str(result["possible_theme"]),
+                theme_confidence=str(result["theme_confidence"]),
+                risk_level=str(result["risk_level"]),
+                should_offer_human_support=bool(result["should_offer_human_support"]),
+            )
+            db.add(signal)
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "expressive_writing signal_persist_error | user_id=%s",
+                current_user.id,
+            )
 
         logger.info(
             "expressive_writing ok | user_id=%s | risk=%s | human_support=%s | context=%s | theme=%s | confidence=%s | origin=%s",
