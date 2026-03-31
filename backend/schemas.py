@@ -33,6 +33,31 @@ AllowedDominantState = Literal[
     "desconectado",
     "desbordado",
 ]
+AllowedContextTag = Literal[
+    "conflicto_interpersonal",
+    "sobrecarga_externa",
+    "tarea_o_exigencia",
+    "incertidumbre_futuro",
+    "cuerpo_o_habitos",
+    "relacion_comida_cuerpo",
+    "aislamiento_vincular",
+    "sin_contexto_claro",
+]
+AllowedPossibleTheme = Literal[
+    "desborde_reactivo",
+    "rumiacion",
+    "culpa_post_reaccion",
+    "miedo_a_perder_control",
+    "autocritica",
+    "bloqueo_decisional",
+    "agotamiento",
+    "evitacion",
+    "impulso_antojo",
+    "desorganizacion",
+    "tristeza_desconexion",
+    "sin_tema_claro",
+]
+AllowedThemeConfidence = Literal["low", "medium"]
 
 
 class RegisterRequest(BaseModel):
@@ -102,6 +127,9 @@ class ExpressiveWritingResponse(BaseModel):
     next_step: str
     risk_level: AllowedRisk
     should_offer_human_support: bool
+    context_tag: AllowedContextTag
+    possible_theme: AllowedPossibleTheme
+    theme_confidence: AllowedThemeConfidence
 
 
 class SessionFeedbackRequest(BaseModel):

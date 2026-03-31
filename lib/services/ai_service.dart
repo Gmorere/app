@@ -37,12 +37,18 @@ class ExpressiveWritingOutput {
   final String nextStep;
   final String riskLevel;
   final bool shouldOfferHumanSupport;
+  final String contextTag;
+  final String possibleTheme;
+  final String themeConfidence;
 
   const ExpressiveWritingOutput({
     required this.reflection,
     required this.nextStep,
     required this.riskLevel,
     required this.shouldOfferHumanSupport,
+    required this.contextTag,
+    required this.possibleTheme,
+    required this.themeConfidence,
   });
 }
 
@@ -290,6 +296,7 @@ class AiService {
     String? emotion,
     String? intensity,
     String briefContext = '',
+    String interventionOrigin = 'manual_library',
   }) async {
     final uri = Uri.parse('${BackendConfig.baseUrl}/armonia/expressive-writing');
 
@@ -302,6 +309,7 @@ class AiService {
             'emotion': emotion,
             'intensity': intensity,
             'brief_context': briefContext.trim(),
+            'intervention_origin': interventionOrigin,
           }),
         )
         .timeout(_timeout);
@@ -327,6 +335,15 @@ class AiService {
     final nextStep = (decoded['next_step'] ?? '').toString().trim();
     final riskLevel = (decoded['risk_level'] ?? '').toString().trim().toLowerCase();
     final shouldOfferHumanSupport = decoded['should_offer_human_support'] == true;
+    final contextTag = (decoded['context_tag'] ?? 'sin_contexto_claro')
+        .toString()
+        .trim();
+    final possibleTheme = (decoded['possible_theme'] ?? 'sin_tema_claro')
+        .toString()
+        .trim();
+    final themeConfidence = (decoded['theme_confidence'] ?? 'low')
+        .toString()
+        .trim();
 
     if (reflection.isEmpty || nextStep.isEmpty) {
       throw Exception('La salida breve llego incompleta.');
@@ -341,6 +358,9 @@ class AiService {
       nextStep: nextStep,
       riskLevel: riskLevel,
       shouldOfferHumanSupport: shouldOfferHumanSupport,
+      contextTag: contextTag,
+      possibleTheme: possibleTheme,
+      themeConfidence: themeConfidence,
     );
   }
 

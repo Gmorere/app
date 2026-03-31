@@ -254,6 +254,9 @@ class _ExpressiveWritingScreenState extends State<ExpressiveWritingScreen> {
           authToken: widget.authToken,
           sessionId: widget.sessionId,
           interventionOrigin: widget.interventionOrigin,
+          contextTag: _result?.contextTag,
+          possibleTheme: _result?.possibleTheme,
+          themeConfidence: _result?.themeConfidence,
         ),
       ),
     );

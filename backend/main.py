@@ -286,6 +286,9 @@ def expressive_writing_output(
             next_step=str(result["next_step"]),
             risk_level=str(result["risk_level"]),
             should_offer_human_support=bool(result["should_offer_human_support"]),
+            context_tag=str(result["context_tag"]),
+            possible_theme=str(result["possible_theme"]),
+            theme_confidence=str(result["theme_confidence"]),
         )
     except HTTPException:
         raise
