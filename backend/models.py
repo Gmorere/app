@@ -30,10 +30,32 @@ class SessionRecord(Base):
     user_message = Column(Text, nullable=True)
     validation = Column(Text, nullable=False)
     next_message = Column(Text, nullable=False)
+    recommended_category = Column(String(80), nullable=True)
     recommended_tool = Column(String(80), nullable=False)
     risk_level = Column(String(20), nullable=False, default="low")
     should_offer_human_support = Column(Boolean, nullable=False, default=False)
+    dominant_state = Column(String(50), nullable=True)
+    relief_feedback = Column(Boolean, nullable=True)
+    utility_feedback = Column(Boolean, nullable=True)
     helped = Column(Boolean, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     user = relationship("User", back_populates="sessions")
+
+
+class ExpressiveWritingSignalRecord(Base):
+    __tablename__ = "expressive_writing_signals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    emotion = Column(String(50), nullable=True)
+    intensity = Column(String(20), nullable=True)
+    intervention_origin = Column(String(40), nullable=False, default="manual_library")
+    reflection = Column(Text, nullable=False)
+    next_step = Column(Text, nullable=False)
+    context_tag = Column(String(80), nullable=False)
+    possible_theme = Column(String(80), nullable=False)
+    theme_confidence = Column(String(20), nullable=False, default="low")
+    risk_level = Column(String(20), nullable=False, default="normal")
+    should_offer_human_support = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

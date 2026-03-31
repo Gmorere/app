@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from auth import create_access_token, get_current_user, hash_password, verify_password
 from db import Base, engine, get_db
-from models import SessionRecord, User
+from models import ExpressiveWritingSignalRecord, SessionRecord, User
 from openai_service import generate_armonia_response, generate_expressive_writing_output
 from schemas import (
     ArmoniaRequest,
@@ -236,6 +236,7 @@ def armonia_respond(
 def expressive_writing_output(
     payload: ExpressiveWritingRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     try:
         result = generate_expressive_writing_output(
@@ -245,11 +246,31 @@ def expressive_writing_output(
             brief_context=payload.brief_context,
         )
 
+        signal = ExpressiveWritingSignalRecord(
+            user_id=current_user.id,
+            emotion=payload.emotion,
+            intensity=payload.intensity,
+            intervention_origin=payload.intervention_origin,
+            reflection=str(result["reflection"]),
+            next_step=str(result["next_step"]),
+            context_tag=str(result["context_tag"]),
+            possible_theme=str(result["possible_theme"]),
+            theme_confidence=str(result["theme_confidence"]),
+            risk_level=str(result["risk_level"]),
+            should_offer_human_support=bool(result["should_offer_human_support"]),
+        )
+        db.add(signal)
+        db.commit()
+
         logger.info(
-            "expressive_writing ok | user_id=%s | risk=%s | human_support=%s",
+            "expressive_writing ok | user_id=%s | risk=%s | human_support=%s | context=%s | theme=%s | confidence=%s | origin=%s",
             current_user.id,
             result["risk_level"],
             result["should_offer_human_support"],
+            result["context_tag"],
+            result["possible_theme"],
+            result["theme_confidence"],
+            payload.intervention_origin,
         )
 
         return ExpressiveWritingResponse(

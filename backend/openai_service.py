@@ -64,7 +64,10 @@ Recibiras:
 Debes responder SIEMPRE en JSON valido con esta estructura exacta:
 {
   "reflection": "string",
-  "next_step": "string"
+  "next_step": "string",
+  "context_tag": "string",
+  "possible_theme": "string",
+  "theme_confidence": "string"
 }
 
 Reglas:
@@ -79,7 +82,14 @@ Reglas:
 9. No conviertas esto en chat.
 10. No uses frases vacias, coach ni autoayuda generica.
 11. Si hay alguna senal favorable real, puedes nombrarla en positivo.
-12. No agregues texto fuera del JSON.
+12. Devuelve tambien una lectura estructurada en shadow mode.
+13. context_tag debe usar solo uno de estos valores:
+    conflicto_interpersonal, sobrecarga_externa, tarea_o_exigencia, incertidumbre_futuro, cuerpo_o_habitos, relacion_comida_cuerpo, aislamiento_vincular, sin_contexto_claro
+14. possible_theme debe usar solo uno de estos valores:
+    desborde_reactivo, rumiacion, culpa_post_reaccion, miedo_a_perder_control, autocritica, bloqueo_decisional, agotamiento, evitacion, impulso_antojo, desorganizacion, tristeza_desconexion, sin_tema_claro
+15. theme_confidence solo puede ser low o medium.
+16. Si no hay suficiente claridad, usa sin_contexto_claro, sin_tema_claro y low.
+17. No agregues texto fuera del JSON.
 """
 
 AllowedRiskScreening = Literal["safe", "vulnerability_high", "high_risk"]
@@ -98,6 +108,57 @@ AllowedDominantState = Literal[
     "desconectado",
     "desbordado",
 ]
+AllowedContextTag = Literal[
+    "conflicto_interpersonal",
+    "sobrecarga_externa",
+    "tarea_o_exigencia",
+    "incertidumbre_futuro",
+    "cuerpo_o_habitos",
+    "relacion_comida_cuerpo",
+    "aislamiento_vincular",
+    "sin_contexto_claro",
+]
+AllowedPossibleTheme = Literal[
+    "desborde_reactivo",
+    "rumiacion",
+    "culpa_post_reaccion",
+    "miedo_a_perder_control",
+    "autocritica",
+    "bloqueo_decisional",
+    "agotamiento",
+    "evitacion",
+    "impulso_antojo",
+    "desorganizacion",
+    "tristeza_desconexion",
+    "sin_tema_claro",
+]
+AllowedThemeConfidence = Literal["low", "medium"]
+
+CONTEXT_TAGS: tuple[AllowedContextTag, ...] = (
+    "conflicto_interpersonal",
+    "sobrecarga_externa",
+    "tarea_o_exigencia",
+    "incertidumbre_futuro",
+    "cuerpo_o_habitos",
+    "relacion_comida_cuerpo",
+    "aislamiento_vincular",
+    "sin_contexto_claro",
+)
+POSSIBLE_THEMES: tuple[AllowedPossibleTheme, ...] = (
+    "desborde_reactivo",
+    "rumiacion",
+    "culpa_post_reaccion",
+    "miedo_a_perder_control",
+    "autocritica",
+    "bloqueo_decisional",
+    "agotamiento",
+    "evitacion",
+    "impulso_antojo",
+    "desorganizacion",
+    "tristeza_desconexion",
+    "sin_tema_claro",
+)
+THEME_CONFIDENCES: tuple[AllowedThemeConfidence, ...] = ("low", "medium")
 
 HIGH_RISK_PATTERNS = [
     r"\bme quiero matar\b",
@@ -761,6 +822,9 @@ def generate_expressive_writing_output(
 ) -> dict[str, str | bool]:
     normalized_text = normalize_text(f"{brief_context} {written_text}")
     risk_screening = screen_risk(normalized_text)
+    default_context_tag: AllowedContextTag = "sin_contexto_claro"
+    default_possible_theme: AllowedPossibleTheme = "sin_tema_claro"
+    default_theme_confidence: AllowedThemeConfidence = "low"
 
     if risk_screening == "high_risk":
         return {
@@ -768,6 +832,9 @@ def generate_expressive_writing_output(
             "next_step": "Ve a apoyo ahora y toma contacto con una persona real o una linea de ayuda.",
             "risk_level": "crisis",
             "should_offer_human_support": True,
+            "context_tag": default_context_tag,
+            "possible_theme": default_possible_theme,
+            "theme_confidence": default_theme_confidence,
         }
 
     if risk_screening == "vulnerability_high":
@@ -776,6 +843,9 @@ def generate_expressive_writing_output(
             "next_step": "Si puedes, busca apoyo humano visible ahora o usa una ayuda breve antes de seguir cargandote.",
             "risk_level": "vulnerability_high",
             "should_offer_human_support": True,
+            "context_tag": default_context_tag,
+            "possible_theme": default_possible_theme,
+            "theme_confidence": default_theme_confidence,
         }
 
     response = client.responses.create(
@@ -810,8 +880,17 @@ def generate_expressive_writing_output(
                     "properties": {
                         "reflection": {"type": "string"},
                         "next_step": {"type": "string"},
+                        "context_tag": {"type": "string", "enum": list(CONTEXT_TAGS)},
+                        "possible_theme": {"type": "string", "enum": list(POSSIBLE_THEMES)},
+                        "theme_confidence": {"type": "string", "enum": list(THEME_CONFIDENCES)},
                     },
-                    "required": ["reflection", "next_step"],
+                    "required": [
+                        "reflection",
+                        "next_step",
+                        "context_tag",
+                        "possible_theme",
+                        "theme_confidence",
+                    ],
                 },
             }
         },
@@ -820,9 +899,18 @@ def generate_expressive_writing_output(
     parsed = json.loads(response.output_text)
     reflection = str(parsed.get("reflection", "")).strip()
     next_step = str(parsed.get("next_step", "")).strip()
+    context_tag = str(parsed.get("context_tag", "")).strip()
+    possible_theme = str(parsed.get("possible_theme", "")).strip()
+    theme_confidence = str(parsed.get("theme_confidence", "")).strip()
 
     if not reflection or not next_step:
         raise ValueError("La salida de escritura expresiva llego incompleta")
+    if context_tag not in CONTEXT_TAGS:
+        context_tag = default_context_tag
+    if possible_theme not in POSSIBLE_THEMES:
+        possible_theme = default_possible_theme
+    if theme_confidence not in THEME_CONFIDENCES:
+        theme_confidence = default_theme_confidence
 
     if response_suggests_human_support(reflection, next_step):
         return {
@@ -830,6 +918,9 @@ def generate_expressive_writing_output(
             "next_step": next_step,
             "risk_level": "vulnerability_high",
             "should_offer_human_support": True,
+            "context_tag": context_tag,
+            "possible_theme": possible_theme,
+            "theme_confidence": theme_confidence,
         }
 
     return {
@@ -837,4 +928,7 @@ def generate_expressive_writing_output(
         "next_step": next_step,
         "risk_level": "normal",
         "should_offer_human_support": False,
+        "context_tag": context_tag,
+        "possible_theme": possible_theme,
+        "theme_confidence": theme_confidence,
     }

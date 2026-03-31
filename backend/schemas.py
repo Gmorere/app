@@ -94,6 +94,7 @@ class ExpressiveWritingRequest(BaseModel):
     emotion: str | None = Field(default=None, max_length=80)
     intensity: str | None = Field(default=None, max_length=40)
     brief_context: str = Field(default="", max_length=4000)
+    intervention_origin: str = Field(default="manual_library", max_length=40)
 
 
 class ExpressiveWritingResponse(BaseModel):
