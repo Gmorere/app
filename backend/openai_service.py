@@ -13,10 +13,11 @@ load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    raise RuntimeError("Falta OPENAI_API_KEY en el archivo .env")
+    raise RuntimeError("Falta OPENAI_API_KEY en las variables de entorno del servicio")
 
-client = OpenAI(api_key=api_key)
 MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-mini")
+OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "20"))
+client = OpenAI(api_key=api_key, timeout=OPENAI_TIMEOUT_SECONDS)
 
 SYSTEM_PROMPT = """
 Eres la capa conversacional de ArmonIA.
@@ -225,6 +226,20 @@ EXPLICIT_DENIAL_PATTERNS = [
     r"\b(?:ya\s+)?no\s+me\s+quiero\s+hacer\s+dano\b",
 ]
 
+HUMAN_SUPPORT_CUES = [
+    "apoyo humano",
+    "persona real",
+    "contacta a alguien",
+    "contacta con alguien",
+    "busca apoyo ahora",
+    "ve a apoyo ahora",
+    "linea de ayuda",
+    "linea de apoyo",
+    "fono ayuda",
+    "habla con alguien",
+    "pide ayuda ahora",
+]
+
 
 def normalize_text(text: str) -> str:
     raw = (text or "").strip().lower()
@@ -234,6 +249,9 @@ def normalize_text(text: str) -> str:
     replacements = {
         " q ": " que ",
         " xq ": " porque ",
+        " kero ": " quiero ",
+        " kero.": " quiero.",
+        " kero,": " quiero,",
         " kiero ": " quiero ",
         " kiero.": " quiero.",
         " kiero,": " quiero,",
@@ -363,6 +381,13 @@ def has_ambiguous_escape_language(text: str) -> bool:
     escape_verbs = ["olvidarme", "desaparecer", "apagarme", "desconectarme", "dormir", "irme"]
     soft_triggers = ["quiero", "quisiera", "me gustaria", "tengo ganas de", "solo quisiera"]
     return any(verb in text for verb in escape_verbs) and any(trigger in text for trigger in soft_triggers)
+
+
+def response_suggests_human_support(*texts: str) -> bool:
+    normalized = normalize_text(" ".join(texts))
+    if not normalized:
+        return False
+    return any(cue in normalized for cue in HUMAN_SUPPORT_CUES)
 
 
 def screen_risk(user_message: str) -> AllowedRiskScreening:
@@ -798,6 +823,14 @@ def generate_expressive_writing_output(
 
     if not reflection or not next_step:
         raise ValueError("La salida de escritura expresiva llego incompleta")
+
+    if response_suggests_human_support(reflection, next_step):
+        return {
+            "reflection": reflection,
+            "next_step": next_step,
+            "risk_level": "vulnerability_high",
+            "should_offer_human_support": True,
+        }
 
     return {
         "reflection": reflection,
