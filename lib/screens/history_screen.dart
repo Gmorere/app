@@ -1,14 +1,24 @@
 import 'package:flutter/material.dart';
-import '../widgets/main_layout.dart';
-import '../services/history_service.dart';
-import '../services/emotional_pulse_service.dart';
+
+import '../core/intervention_origin.dart';
 import '../models/emotion_record.dart';
 import '../models/emotional_pulse_record.dart';
+import '../core/emotion_normalizer.dart';
+import '../services/emotional_pulse_service.dart';
+import '../services/history_service.dart';
+import '../widgets/main_layout.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
+  @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
   static const Color _primaryBlue = Color(0xFF7FA8B8);
+
+  _HistoryTab _selectedTab = _HistoryTab.interactions;
 
   String _formatDate(DateTime date) {
     return "${date.day}/${date.month} ${date.hour}:${date.minute.toString().padLeft(2, '0')}";
@@ -16,24 +26,24 @@ class HistoryScreen extends StatelessWidget {
 
   String _feedbackLabel(String feedback) {
     switch (feedback) {
-      case "good":
-        return "Sí ayudó";
-      case "neutral":
-        return "Ayudó un poco";
-      case "bad":
-        return "No ayudó mucho";
+      case 'good':
+        return 'S\u00ed ayud\u00f3';
+      case 'neutral':
+        return 'Ayud\u00f3 un poco';
+      case 'bad':
+        return 'No ayud\u00f3 mucho';
       default:
-        return "";
+        return 'Sin feedback';
     }
   }
 
   IconData _feedbackIcon(String feedback) {
     switch (feedback) {
-      case "good":
+      case 'good':
         return Icons.thumb_up_alt_outlined;
-      case "neutral":
+      case 'neutral':
         return Icons.thumbs_up_down_outlined;
-      case "bad":
+      case 'bad':
         return Icons.thumb_down_alt_outlined;
       default:
         return Icons.help_outline;
@@ -41,17 +51,17 @@ class HistoryScreen extends StatelessWidget {
   }
 
   String _readableEmotion(String emotion) {
-    switch (emotion.toLowerCase()) {
-      case "ansiedad":
-        return "Ansiedad";
-      case "sobrepasado":
-        return "Sobrepasado";
-      case "bloqueado":
-        return "Bloqueado";
-      case "rabia":
-        return "Rabia";
-      case "triste":
-        return "Tristeza";
+    switch (EmotionNormalizer.normalizeEmotion(emotion)) {
+      case 'ansiedad':
+        return 'Ansiedad';
+      case 'sobrecarga':
+        return 'Sobrecarga';
+      case 'bloqueo':
+        return 'Bloqueo';
+      case 'rabia':
+        return 'Rabia';
+      case 'tristeza':
+        return 'Tristeza';
       default:
         return emotion;
     }
@@ -59,12 +69,12 @@ class HistoryScreen extends StatelessWidget {
 
   String _readableIntensity(String intensity) {
     switch (intensity.toLowerCase()) {
-      case "alto":
-        return "Alta";
-      case "medio":
-        return "Media";
-      case "bajo":
-        return "Baja";
+      case 'alto':
+        return 'Alta';
+      case 'medio':
+        return 'Media';
+      case 'bajo':
+        return 'Baja';
       default:
         return intensity;
     }
@@ -72,51 +82,105 @@ class HistoryScreen extends StatelessWidget {
 
   String _readableIntervention(String intervention) {
     switch (intervention) {
-      case "breathing":
-        return "Respiración guiada";
-      case "grounding":
-        return "Volver al presente";
-      case "clench_fists":
-        return "Liberar tensión";
-      case "micro_action":
-        return "Dar un pequeño paso";
-      case "reframe":
-        return "Mirarlo desde otro ángulo";
-      case "conversation":
-        return "Hablarlo un momento";
-      case "support_path":
-        return "Buscar apoyo";
+      case 'breathing':
+        return 'Respiraci\u00f3n guiada';
+      case 'grounding':
+        return 'Volver al presente';
+      case 'clench_fists':
+        return 'Liberar tensi\u00f3n';
+      case 'movement':
+        return 'Mover el cuerpo un momento';
+      case 'sensory_pause':
+        return 'Pausa sensorial breve';
+      case 'micro_action':
+        return 'Dar un peque\u00f1o paso';
+      case 'reframe':
+        return 'Mirarlo desde otro \u00e1ngulo';
+      case 'expressive_writing':
+        return 'Escribir para ordenarlo';
+      case 'conversation':
+        return 'Hablarlo un momento';
+      case 'support_path':
+        return 'Buscar apoyo';
       default:
-        return "Ayuda breve";
+        return 'Ayuda breve';
     }
   }
 
+  double _pulseLoadAverage(EmotionalPulseRecord pulse) {
+    return (pulse.overload + pulse.tension) / 2;
+  }
+
+  double _pulseSupportAverage(EmotionalPulseRecord pulse) {
+    return (pulse.energy + pulse.rest + pulse.connection) / 3;
+  }
+
+  double _pulseLoadAverageForList(List<EmotionalPulseRecord> records) {
+    if (records.isEmpty) return 0;
+    final total = records.fold<double>(
+      0,
+      (sum, pulse) => sum + _pulseLoadAverage(pulse),
+    );
+    return total / records.length;
+  }
+
+  double _pulseSupportAverageForList(List<EmotionalPulseRecord> records) {
+    if (records.isEmpty) return 0;
+    final total = records.fold<double>(
+      0,
+      (sum, pulse) => sum + _pulseSupportAverage(pulse),
+    );
+    return total / records.length;
+  }
+
+  String _pulseLevelLabel(double value) {
+    if (value >= 3.5) return 'Alta';
+    if (value >= 2.5) return 'Media';
+    return 'Baja';
+  }
+
+  String _strongestLoadLabel(EmotionalPulseRecord pulse) {
+    final top = <String, int>{
+      'Sobrecarga': pulse.overload,
+      'Tensi\u00f3n': pulse.tension,
+    }.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return top.first.key;
+  }
+
+  String _strongestSupportLabel(EmotionalPulseRecord pulse) {
+    final top = <String, int>{
+      'Energ\u00eda': pulse.energy,
+      'Descanso': pulse.rest,
+      'Conexi\u00f3n': pulse.connection,
+    }.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return top.first.key;
+  }
+
+  String _strongestSupportLabelFromRecords(List<EmotionalPulseRecord> records) {
+    if (records.isEmpty) return 'Sin datos';
+
+    final totals = <String, double>{
+      'Energ\u00eda': 0,
+      'Descanso': 0,
+      'Conexi\u00f3n': 0,
+    };
+
+    for (final pulse in records) {
+      totals['Energ\u00eda'] = totals['Energ\u00eda']! + pulse.energy;
+      totals['Descanso'] = totals['Descanso']! + pulse.rest;
+      totals['Conexi\u00f3n'] = totals['Conexi\u00f3n']! + pulse.connection;
+    }
+
+    final ranked = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return ranked.first.key;
+  }
+
   String _buildPulseSummary(EmotionalPulseRecord pulse) {
-    final overloadHigh =
-        pulse.overload == "bastante" || pulse.overload == "mucho";
-    final lowEnergy = pulse.energy == "muy baja" || pulse.energy == "baja";
-    final poorSleep =
-        pulse.sleepQuality == "muy malo" || pulse.sleepQuality == "malo";
-    final highIrritability =
-        pulse.irritability == "bastante" || pulse.irritability == "mucho";
-    final lowConnection =
-        pulse.connection == "muy solo" || pulse.connection == "algo solo";
-    final lowCoping =
-        pulse.copingCapacity == "muy baja" || pulse.copingCapacity == "baja";
-
-    if ((overloadHigh && lowEnergy) || (poorSleep && lowCoping)) {
-      return "Sobrecarga alta";
-    }
-
-    if (highIrritability || overloadHigh) {
-      return "Bastante tensión";
-    }
-
-    if (lowConnection || lowCoping) {
-      return "Más contención";
-    }
-
-    return "Más estable";
+    return 'Carga ${_pulseLevelLabel(_pulseLoadAverage(pulse))} · Ayuda ${_pulseLevelLabel(_pulseSupportAverage(pulse))}';
   }
 
   int _interactionsThisWeek(List<EmotionRecord> records) {
@@ -129,94 +193,256 @@ class HistoryScreen extends StatelessWidget {
     }).length;
   }
 
-  String _mostFrequentEmotion(List<EmotionRecord> records) {
-    if (records.isEmpty) return "Sin datos";
+  List<EmotionRecord> _analysisInteractionRecords(List<EmotionRecord> records) {
+    return records
+        .where(
+          (record) => record.interventionOrigin != InterventionOrigin.manualLibrary,
+        )
+        .toList();
+  }
 
-    final Map<String, int> counts = {};
+  int _pulseThisWeek(List<EmotionalPulseRecord> records) {
+    final now = DateTime.now();
+    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+    return records.where((record) {
+      return record.timestamp.isAfter(
+        DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day),
+      );
+    }).length;
+  }
+
+  String _mostFrequentEmotion(List<EmotionRecord> records) {
+    if (records.isEmpty) return 'Sin datos';
+    final counts = <String, int>{};
     for (final record in records) {
       counts[record.emotion] = (counts[record.emotion] ?? 0) + 1;
     }
-
-    final best = counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+    final best =
+        counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
     return _readableEmotion(best);
   }
 
   String _mostHelpfulIntervention(List<EmotionRecord> records) {
-    final helpful = records.where((r) => r.feedback == "good").toList();
-    if (helpful.isEmpty) return "Sin datos";
-
-    final Map<String, int> counts = {};
+    final helpful = records.where(_countsAsHelpfulIntervention).toList();
+    if (helpful.isEmpty) return 'Sin datos';
+    final counts = <String, int>{};
     for (final record in helpful) {
       counts[record.intervention] = (counts[record.intervention] ?? 0) + 1;
     }
-
-    final best = counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+    final best =
+        counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
     return _readableIntervention(best);
   }
 
-  String _trendText(
-    List<EmotionRecord> records,
-    EmotionalPulseRecord? latestPulse,
-  ) {
-    final interactions = _interactionsThisWeek(records);
-
-    if (interactions == 0 && latestPulse == null) {
-      return "Todavía no hay actividad suficiente para mostrar una tendencia.";
+  bool _countsAsHelpfulIntervention(EmotionRecord record) {
+    if (record.utilityFeedback != null) {
+      return record.utilityFeedback == true;
     }
-
-    if (latestPulse != null && interactions > 0) {
-      return "Últimos 7 días: $interactions interacciones y pulso reciente ${_buildPulseSummary(latestPulse).toLowerCase()}.";
+    if (record.reliefFeedback != null) {
+      return record.reliefFeedback == true;
     }
-
-    if (interactions > 0) {
-      return "Últimos 7 días: $interactions interacciones registradas.";
-    }
-
-    return "Último pulso: ${_buildPulseSummary(latestPulse!)}.";
+    return record.feedback == 'good';
   }
 
-  Set<int> _daysWithActivity(
-    List<EmotionRecord> records,
-    EmotionalPulseRecord? latestPulse,
+  Set<int> _daysWithInteractionActivity(
+    List<EmotionRecord> interactionRecords,
     int year,
     int month,
   ) {
     final days = <int>{};
-
-    for (final record in records) {
+    for (final record in interactionRecords) {
       if (record.timestamp.year == year && record.timestamp.month == month) {
         days.add(record.timestamp.day);
       }
     }
+    return days;
+  }
 
-    if (latestPulse != null &&
-        latestPulse.timestamp.year == year &&
-        latestPulse.timestamp.month == month) {
-      days.add(latestPulse.timestamp.day);
+  Set<int> _daysWithPulseActivity(
+    List<EmotionalPulseRecord> pulseRecords,
+    int year,
+    int month,
+  ) {
+    final days = <int>{};
+    for (final pulse in pulseRecords) {
+      if (pulse.timestamp.year == year && pulse.timestamp.month == month) {
+        days.add(pulse.timestamp.day);
+      }
+    }
+    return days;
+  }
+
+  String _buildPulseDetail(EmotionalPulseRecord pulse) {
+    return 'Pesa m\u00e1s ${_strongestLoadLabel(pulse)}. Ayuda m\u00e1s ${_strongestSupportLabel(pulse)}.';
+  }
+
+  String _buildPulseSummaryV2(EmotionalPulseRecord pulse) {
+    return 'Carga ${_pulseLevelLabel(_pulseLoadAverage(pulse))} \u00b7 Ayuda ${_pulseLevelLabel(_pulseSupportAverage(pulse))}';
+  }
+
+  String _buildPulseMeaningV2({
+    required EmotionalPulseRecord pulse,
+    required List<EmotionalPulseRecord> pulseRecords,
+  }) {
+    final latestLoad = _pulseLoadAverage(pulse);
+    final latestSupport = _pulseSupportAverage(pulse);
+    final accumulatedLoad = _pulseLoadAverageForList(pulseRecords);
+    final accumulatedSupport = _pulseSupportAverageForList(pulseRecords);
+
+    if (latestSupport >= 4 && latestLoad <= 2.5) {
+      return 'Tu pulso reciente muestra varias se\u00f1ales que ayudan. En tus registros tambi\u00e9n se ve algo que te sostiene con bastante claridad.';
+    }
+    if (latestLoad >= 4 && latestSupport <= 2.5) {
+      return 'Tu pulso reciente muestra bastante carga y pocas se\u00f1ales que ayudan. Ese desequilibrio merece una lectura m\u00e1s cuidadosa.';
+    }
+    if (latestSupport > latestLoad && accumulatedSupport >= accumulatedLoad) {
+      return 'En este momento aparecen algo m\u00e1s de se\u00f1ales que ayudan que de carga, y esa tendencia tambi\u00e9n se alcanza a ver en tus registros recientes.';
+    }
+    if (latestLoad > latestSupport && accumulatedLoad >= accumulatedSupport) {
+      return 'En este momento pesa algo m\u00e1s la carga, y ese mismo peso tambi\u00e9n se repite en tus registros recientes.';
+    }
+    if (latestSupport > latestLoad) {
+      return 'Hoy aparecen algo m\u00e1s de se\u00f1ales que ayudan, aunque en tus registros recientes la carga sigue siendo relevante.';
+    }
+    if (latestLoad > latestSupport) {
+      return 'Hoy pesa algo m\u00e1s la carga, aunque en tus registros recientes tambi\u00e9n hay se\u00f1ales que ayudan.';
+    }
+    return 'Tu pulso reciente muestra una mezcla bastante pareja entre carga y se\u00f1ales que ayudan.';
+  }
+
+  String _pulseTrendTextV2(List<EmotionalPulseRecord> records) {
+    if (records.length < 2) {
+      return 'Todav\u00eda no hay suficientes pulsos para mostrar c\u00f3mo se viene moviendo tu carga reciente.';
     }
 
-    return days;
+    final chronological = records.reversed.toList();
+    final half = chronological.length ~/ 2;
+    if (half == 0) {
+      return 'Todav\u00eda no hay suficientes pulsos para mostrar c\u00f3mo se viene moviendo tu carga reciente.';
+    }
+
+    final firstHalf = chronological.take(half).toList();
+    final secondHalf = chronological.skip(half).toList();
+
+    final firstLoad = _pulseLoadAverageForList(firstHalf);
+    final secondLoad = _pulseLoadAverageForList(secondHalf);
+    final firstSupport = _pulseSupportAverageForList(firstHalf);
+    final secondSupport = _pulseSupportAverageForList(secondHalf);
+
+    if (secondLoad <= firstLoad - 0.35 && secondSupport >= firstSupport) {
+      return 'En tus registros recientes se ve menos carga y algo m\u00e1s de se\u00f1ales que ayudan.';
+    }
+    if (secondLoad >= firstLoad + 0.35 && secondSupport <= firstSupport) {
+      return 'En tus registros recientes la carga viene subiendo y lo que ayuda aparece menos.';
+    }
+    if (secondLoad <= firstLoad - 0.35) {
+      return 'En tus registros recientes la carga viene bajando.';
+    }
+    if (secondLoad >= firstLoad + 0.35) {
+      return 'En tus registros recientes la carga viene subiendo.';
+    }
+    if (secondSupport >= firstSupport + 0.35) {
+      return 'En tus registros recientes aparecen un poco m\u00e1s de se\u00f1ales que ayudan.';
+    }
+    if (secondSupport <= firstSupport - 0.35) {
+      return 'En tus registros recientes aparecen menos se\u00f1ales que ayudan.';
+    }
+    return 'En tus registros recientes no aparece un cambio brusco entre carga y lo que ayuda.';
+  }
+
+  List<Widget> _buildSummaryCards({
+    required List<EmotionRecord> interactionRecords,
+    required List<EmotionalPulseRecord> pulseRecords,
+  }) {
+    if (_selectedTab == _HistoryTab.pulse) {
+      final averageLoad = _pulseLoadAverageForList(pulseRecords);
+      return [
+        _SummaryCard(
+          icon: Icons.track_changes_outlined,
+          title: 'Carga reciente',
+          value: _pulseLevelLabel(averageLoad),
+          backgroundColor: const Color(0xFFF4EEFB),
+          iconColor: const Color(0xFF9C7CC8),
+        ),
+        _SummaryCard(
+          icon: Icons.hub_outlined,
+          title: 'Lo que m\u00e1s ayuda',
+          value: _strongestSupportLabelFromRecords(pulseRecords),
+          backgroundColor: const Color(0xFFF4EEFB),
+          iconColor: const Color(0xFF9C7CC8),
+        ),
+        _SummaryCard(
+          icon: Icons.calendar_today_outlined,
+          title: 'Esta semana',
+          value: '${_pulseThisWeek(pulseRecords)} pulsos',
+          backgroundColor: const Color(0xFFF5F9FB),
+          iconColor: _primaryBlue,
+        ),
+        _SummaryCard(
+          icon: Icons.insights_outlined,
+          title: 'Pulsos registrados',
+          value: '${pulseRecords.length} total',
+          backgroundColor: const Color(0xFFF8F4FC),
+          iconColor: const Color(0xFF9C7CC8),
+        ),
+      ];
+    }
+
+    return [
+      _SummaryCard(
+        icon: Icons.psychology_alt_outlined,
+          title: 'Lo que m\u00e1s aparece',
+        value: _mostFrequentEmotion(interactionRecords),
+        backgroundColor: const Color(0xFFEEF8FB),
+        iconColor: _primaryBlue,
+      ),
+      _SummaryCard(
+        icon: Icons.favorite_border,
+          title: 'Lo que m\u00e1s ayuda',
+        value: _mostHelpfulIntervention(interactionRecords),
+        backgroundColor: const Color(0xFFF1F8EC),
+        iconColor: const Color(0xFF8BB174),
+      ),
+      _SummaryCard(
+        icon: Icons.calendar_today_outlined,
+        title: 'Esta semana',
+        value: '${_interactionsThisWeek(interactionRecords)} interacciones',
+        backgroundColor: const Color(0xFFF4F8FA),
+        iconColor: _primaryBlue,
+      ),
+      _SummaryCard(
+        icon: Icons.history_outlined,
+        title: 'Interacciones registradas',
+        value: '${interactionRecords.length} total',
+        backgroundColor: const Color(0xFFF5F9FB),
+        iconColor: _primaryBlue,
+      ),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
-    final List<EmotionRecord> records =
-        HistoryService.getRecords().reversed.toList();
-    final EmotionalPulseRecord? latestPulse =
-        EmotionalPulseService.getLatestRecord();
+    final interactionRecords = _analysisInteractionRecords(
+      HistoryService.getRecords(),
+    ).reversed.toList();
+    final pulseRecords = EmotionalPulseService.getRecords().reversed.toList();
+    final latestPulse = EmotionalPulseService.getLatestRecord();
 
     final now = DateTime.now();
-    final markedDays =
-        _daysWithActivity(records, latestPulse, now.year, now.month);
+    final markedDays = _selectedTab == _HistoryTab.pulse
+        ? _daysWithPulseActivity(pulseRecords, now.year, now.month)
+        : _daysWithInteractionActivity(interactionRecords, now.year, now.month);
+
+    final hasNoData = interactionRecords.isEmpty && pulseRecords.isEmpty;
 
     return MainLayout(
-      title: "Historial",
-      child: (records.isEmpty && latestPulse == null)
+      title: 'Historial',
+      child: hasNoData
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: Text(
-                  "Todavía no hay registros aquí.\nCuando uses ArmonIA, iré guardando lo que te ayudó para acompañarte mejor.",
+                  'Todav\u00eda no hay registros aqu\u00ed.\nCuando uses ArmonIA, ir\u00e9 guardando tu pulso y las interacciones para acompa\u00f1ar mejor tu proceso.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 18,
@@ -229,6 +455,8 @@ class HistoryScreen extends StatelessWidget {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                _buildTabSelector(),
+                const SizedBox(height: 16),
                 GridView.count(
                   crossAxisCount: 2,
                   shrinkWrap: true,
@@ -236,91 +464,171 @@ class HistoryScreen extends StatelessWidget {
                   mainAxisSpacing: 10,
                   crossAxisSpacing: 10,
                   childAspectRatio: 1.65,
-                  children: [
-                    _SummaryCard(
-                      icon: Icons.calendar_today_outlined,
-                      title: "Esta semana",
-                      value: "${_interactionsThisWeek(records)} interacciones",
-                      backgroundColor: const Color(0xFFEEF8FB),
-                      iconColor: _primaryBlue,
-                    ),
-                    _SummaryCard(
-                      icon: Icons.psychology_alt_outlined,
-                      title: "Emoción frecuente",
-                      value: _mostFrequentEmotion(records),
-                      backgroundColor: const Color(0xFFFCF7EA),
-                      iconColor: const Color(0xFFE0B85C),
-                    ),
-                    _SummaryCard(
-                      icon: Icons.favorite_border,
-                      title: "Más útil",
-                      value: _mostHelpfulIntervention(records),
-                      backgroundColor: const Color(0xFFF1F8EC),
-                      iconColor: const Color(0xFF8BB174),
-                    ),
-                    _SummaryCard(
-                      icon: Icons.insights_outlined,
-                      title: "Último pulso",
-                      value: latestPulse != null
-                          ? _buildPulseSummary(latestPulse)
-                          : "Sin datos",
-                      backgroundColor: const Color(0xFFF4EEFB),
-                      iconColor: const Color(0xFF9C7CC8),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _MonthActivityCard(
-                  year: now.year,
-                  month: now.month,
-                  markedDays: markedDays,
+                  children: _buildSummaryCards(
+                    interactionRecords: interactionRecords,
+                    pulseRecords: pulseRecords,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF5F9FB),
-                    borderRadius: BorderRadius.circular(16),
+                if (_selectedTab == _HistoryTab.pulse) ...[
+                  const _SectionHintCard(
+                    text:
+                        'Aqu\u00ed puedes ver c\u00f3mo se viene moviendo tu carga reciente y qu\u00e9 se\u00f1ales te han venido ayudando m\u00e1s.',
                   ),
-                  child: Text(
-                    _trendText(records, latestPulse),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                      height: 1.35,
+                  const SizedBox(height: 12),
+                  _PulseTrendCard(text: _pulseTrendTextV2(pulseRecords)),
+                  if (latestPulse != null) ...[
+                    const SizedBox(height: 12),
+                    _PulseInsightCard(
+                      title: 'Qu\u00e9 significa esto',
+                      text: _buildPulseMeaningV2(
+                        pulse: latestPulse,
+                        pulseRecords: pulseRecords,
+                      ),
                     ),
+                  ],
+                  const SizedBox(height: 16),
+                  _MonthActivityCard(
+                    year: now.year,
+                    month: now.month,
+                    markedDays: markedDays,
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Registros recientes",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Historial de pulso',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
-                ),
-                const SizedBox(height: 10),
-                if (latestPulse != null)
-                  _RecentPulseCard(
-                    pulse: latestPulse,
-                    summary: _buildPulseSummary(latestPulse),
-                    formatDate: _formatDate,
-                  ),
-                ...records.take(6).map(
-                  (record) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _RecentInteractionCard(
-                      date: _formatDate(record.timestamp),
-                      emotion: _readableEmotion(record.emotion),
-                      intensity: _readableIntensity(record.intensity),
-                      intervention: _readableIntervention(record.intervention),
-                      feedback: _feedbackLabel(record.feedback),
-                      feedbackIcon: _feedbackIcon(record.feedback),
+                  const SizedBox(height: 10),
+                  if (pulseRecords.isEmpty)
+                    const _EmptySectionCard(
+                      text: 'Todav\u00eda no hay pulsos registrados.',
+                    )
+                  else ...[
+                    ...pulseRecords.take(8).map(
+                      (pulse) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _RecentPulseCard(
+                          pulse: pulse,
+                          summary: _buildPulseSummaryV2(pulse),
+                          detail: _buildPulseDetail(pulse),
+                          formatDate: _formatDate,
+                        ),
+                      ),
                     ),
+                  ],
+                ] else ...[
+                  const _SectionHintCard(
+                    text:
+                        'Aqu\u00ed puedes revisar qu\u00e9 te ha pasado, qu\u00e9 tipo de ayuda te sirvi\u00f3 m\u00e1s y qu\u00e9 se viene repitiendo.',
                   ),
-                ),
+                  const SizedBox(height: 12),
+                  _InteractionInsightCard(
+                    text: interactionRecords.isEmpty
+                        ? 'Todav\u00eda no hay suficientes interacciones para mostrar un patr\u00f3n claro.'
+                        : 'Lo que ArmonIA viene viendo: cuando aparece ${_mostFrequentEmotion(interactionRecords).toLowerCase()}, suele ayudarte m\u00e1s ${_mostHelpfulIntervention(interactionRecords).toLowerCase()}.',
+                  ),
+                  const SizedBox(height: 16),
+                  _MonthActivityCard(
+                    year: now.year,
+                    month: now.month,
+                    markedDays: markedDays,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Historial de interacciones',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  if (interactionRecords.isEmpty)
+                    const _EmptySectionCard(
+                      text: 'Todav\u00eda no hay interacciones registradas.',
+                    )
+                  else
+                    ...interactionRecords.take(8).map(
+                      (record) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _RecentInteractionCard(
+                          date: _formatDate(record.timestamp),
+                          emotion: _readableEmotion(record.emotion),
+                          intensity: _readableIntensity(record.intensity),
+                          intervention:
+                              _readableIntervention(record.intervention),
+                          feedback: _feedbackLabel(record.feedback),
+                          feedbackIcon: _feedbackIcon(record.feedback),
+                        ),
+                      ),
+                    ),
+                ],
               ],
             ),
+    );
+  }
+
+  Widget _buildTabSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F7),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _HistoryTabButton(
+              label: 'Pulso',
+              selected: _selectedTab == _HistoryTab.pulse,
+              onTap: () => setState(() => _selectedTab = _HistoryTab.pulse),
+            ),
+          ),
+          Expanded(
+            child: _HistoryTabButton(
+              label: 'Interacciones',
+              selected: _selectedTab == _HistoryTab.interactions,
+              onTap: () =>
+                  setState(() => _selectedTab = _HistoryTab.interactions),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _HistoryTab { pulse, interactions }
+
+class _HistoryTabButton extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _HistoryTabButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  static const Color _primaryBlue = Color(0xFF7FA8B8);
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.bold,
+            color: selected ? _primaryBlue : Colors.black54,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -393,6 +701,31 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
+class _SectionHintCard extends StatelessWidget {
+  final String text;
+
+  const _SectionHintCard({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFB),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 13.8,
+          color: Colors.black54,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
 class _MonthActivityCard extends StatelessWidget {
   final int year;
   final int month;
@@ -406,19 +739,19 @@ class _MonthActivityCard extends StatelessWidget {
 
   String _monthName(int month) {
     const months = [
-      "",
-      "Enero",
-      "Febrero",
-      "Marzo",
-      "Abril",
-      "Mayo",
-      "Junio",
-      "Julio",
-      "Agosto",
-      "Septiembre",
-      "Octubre",
-      "Noviembre",
-      "Diciembre"
+      '',
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
     ];
     return months[month];
   }
@@ -427,9 +760,8 @@ class _MonthActivityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final firstDay = DateTime(year, month, 1);
     final daysInMonth = DateTime(year, month + 1, 0).day;
-    final firstWeekday = firstDay.weekday; // 1 lun ... 7 dom
-
-    final List<Widget> cells = [];
+    final firstWeekday = firstDay.weekday;
+    final cells = <Widget>[];
 
     for (int i = 1; i < firstWeekday; i++) {
       cells.add(const SizedBox());
@@ -437,7 +769,6 @@ class _MonthActivityCard extends StatelessWidget {
 
     for (int day = 1; day <= daysInMonth; day++) {
       final isMarked = markedDays.contains(day);
-
       cells.add(
         Center(
           child: Container(
@@ -449,7 +780,7 @@ class _MonthActivityCard extends StatelessWidget {
             ),
             child: Center(
               child: Text(
-                "$day",
+                '$day',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: isMarked ? FontWeight.bold : FontWeight.normal,
@@ -479,22 +810,19 @@ class _MonthActivityCard extends StatelessWidget {
         children: [
           Text(
             "${_monthName(month)} $year",
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              Text("L", style: TextStyle(color: Colors.black54)),
-              Text("M", style: TextStyle(color: Colors.black54)),
-              Text("M", style: TextStyle(color: Colors.black54)),
-              Text("J", style: TextStyle(color: Colors.black54)),
-              Text("V", style: TextStyle(color: Colors.black54)),
-              Text("S", style: TextStyle(color: Colors.black54)),
-              Text("D", style: TextStyle(color: Colors.black54)),
+              Text('L', style: TextStyle(color: Colors.black54)),
+              Text('M', style: TextStyle(color: Colors.black54)),
+              Text('M', style: TextStyle(color: Colors.black54)),
+              Text('J', style: TextStyle(color: Colors.black54)),
+              Text('V', style: TextStyle(color: Colors.black54)),
+              Text('S', style: TextStyle(color: Colors.black54)),
+              Text('D', style: TextStyle(color: Colors.black54)),
             ],
           ),
           const SizedBox(height: 10),
@@ -513,77 +841,193 @@ class _MonthActivityCard extends StatelessWidget {
   }
 }
 
+class _PulseTrendCard extends StatelessWidget {
+  final String text;
+
+  const _PulseTrendCard({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F9FB),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Colors.black87,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
+class _PulseInsightCard extends StatelessWidget {
+  final String title;
+  final String text;
+
+  const _PulseInsightCard({
+    required this.title,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4EEFB),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            text,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.black87,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InteractionInsightCard extends StatelessWidget {
+  final String text;
+
+  const _InteractionInsightCard({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F8EC),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Colors.black87,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptySectionCard extends StatelessWidget {
+  final String text;
+
+  const _EmptySectionCard({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFB),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Colors.black54,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
 class _RecentPulseCard extends StatelessWidget {
   final EmotionalPulseRecord pulse;
   final String summary;
+  final String detail;
   final String Function(DateTime) formatDate;
 
   const _RecentPulseCard({
     required this.pulse,
     required this.summary,
+    required this.detail,
     required this.formatDate,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF4EEFB),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(
-                Icons.insights_outlined,
-                color: Color(0xFF9C7CC8),
-                size: 20,
-              ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4EEFB),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Pulso emocional",
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    summary,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                      height: 1.3,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    formatDate(pulse.timestamp),
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black45,
-                    ),
-                  ),
-                ],
-              ),
+            child: const Icon(
+              Icons.insights_outlined,
+              color: Color(0xFF9C7CC8),
+              size: 20,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Pulso emocional',
+                  style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  summary,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  detail,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black54,
+                    height: 1.3,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  formatDate(pulse.timestamp),
+                  style: const TextStyle(fontSize: 12, color: Colors.black45),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -628,10 +1072,7 @@ class _RecentInteractionCard extends StatelessWidget {
             width: 58,
             child: Text(
               date,
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: Colors.black54,
-              ),
+              style: const TextStyle(fontSize: 12.5, color: Colors.black54),
             ),
           ),
           const SizedBox(width: 8),
@@ -640,19 +1081,13 @@ class _RecentInteractionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "$emotion, $intensity",
-                  style: const TextStyle(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  '$emotion, $intensity',
+                  style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   intervention,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black87,
-                  ),
+                  style: const TextStyle(fontSize: 14, color: Colors.black87),
                 ),
                 const SizedBox(height: 5),
                 Row(
