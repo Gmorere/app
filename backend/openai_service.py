@@ -2,10 +2,12 @@ import json
 import os
 import re
 import unicodedata
+from json import JSONDecodeError
 from typing import Literal
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from fastapi import HTTPException
+from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI
 
 from schemas import ArmoniaRequest, ArmoniaResponsePayload
 
@@ -18,6 +20,18 @@ if not api_key:
 MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "45"))
 client = OpenAI(api_key=api_key, timeout=OPENAI_TIMEOUT_SECONDS)
+
+
+class ExpressiveWritingServiceError(HTTPException):
+    def __init__(
+        self,
+        public_detail: str,
+        *,
+        log_reason: str,
+        status_code: int = 502,
+    ) -> None:
+        super().__init__(status_code=status_code, detail=public_detail)
+        self.log_reason = log_reason
 
 SYSTEM_PROMPT = """
 Eres la capa conversacional de ArmonIA.
@@ -855,55 +869,92 @@ def generate_expressive_writing_output(
             "theme_confidence": default_theme_confidence,
         }
 
-    response = client.responses.create(
-        model=MODEL_NAME,
-        input=[
-            {
-                "role": "system",
-                "content": [{"type": "input_text", "text": EXPRESSIVE_WRITING_SYSTEM_PROMPT}],
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": build_expressive_writing_prompt(
-                            written_text=written_text,
-                            emotion=emotion,
-                            intensity=intensity,
-                            brief_context=brief_context,
-                        ),
-                    }
-                ],
-            },
-        ],
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "expressive_writing_response",
-                "schema": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "reflection": {"type": "string"},
-                        "next_step": {"type": "string"},
-                        "context_tag": {"type": "string", "enum": list(CONTEXT_TAGS)},
-                        "possible_theme": {"type": "string", "enum": list(POSSIBLE_THEMES)},
-                        "theme_confidence": {"type": "string", "enum": list(THEME_CONFIDENCES)},
-                    },
-                    "required": [
-                        "reflection",
-                        "next_step",
-                        "context_tag",
-                        "possible_theme",
-                        "theme_confidence",
+    try:
+        response = client.responses.create(
+            model=MODEL_NAME,
+            input=[
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": EXPRESSIVE_WRITING_SYSTEM_PROMPT}],
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": build_expressive_writing_prompt(
+                                written_text=written_text,
+                                emotion=emotion,
+                                intensity=intensity,
+                                brief_context=brief_context,
+                            ),
+                        }
                     ],
                 },
-            }
-        },
-    )
+            ],
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "expressive_writing_response",
+                    "schema": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "reflection": {"type": "string"},
+                            "next_step": {"type": "string"},
+                            "context_tag": {"type": "string", "enum": list(CONTEXT_TAGS)},
+                            "possible_theme": {"type": "string", "enum": list(POSSIBLE_THEMES)},
+                            "theme_confidence": {"type": "string", "enum": list(THEME_CONFIDENCES)},
+                        },
+                        "required": [
+                            "reflection",
+                            "next_step",
+                            "context_tag",
+                            "possible_theme",
+                            "theme_confidence",
+                        ],
+                    },
+                }
+            },
+        )
+    except APITimeoutError as exc:
+        raise ExpressiveWritingServiceError(
+            "La salida breve esta tardando demasiado en generarse.",
+            log_reason="openai_timeout",
+            status_code=504,
+        ) from exc
+    except APIConnectionError as exc:
+        raise ExpressiveWritingServiceError(
+            "No pude conectar la salida breve con el modelo en este momento.",
+            log_reason="openai_connection_error",
+        ) from exc
+    except APIStatusError as exc:
+        status_code = 503 if exc.status_code == 429 else 502
+        raise ExpressiveWritingServiceError(
+            (
+                "La salida breve esta con mucha demanda en este momento."
+                if exc.status_code == 429
+                else "El servicio de salida breve no pudo responder bien en este momento."
+            ),
+            log_reason=f"openai_status_{exc.status_code}",
+            status_code=status_code,
+        ) from exc
 
-    parsed = json.loads(response.output_text)
+    output_text = (response.output_text or "").strip()
+    if not output_text:
+        raise ExpressiveWritingServiceError(
+            "La salida breve llego vacia.",
+            log_reason="empty_output_text",
+        )
+
+    try:
+        parsed = json.loads(output_text)
+    except JSONDecodeError as exc:
+        raise ExpressiveWritingServiceError(
+            "La salida breve llego en un formato invalido.",
+            log_reason="invalid_json_output",
+        ) from exc
+
     reflection = str(parsed.get("reflection", "")).strip()
     next_step = str(parsed.get("next_step", "")).strip()
     context_tag = str(parsed.get("context_tag", "")).strip()
@@ -911,7 +962,10 @@ def generate_expressive_writing_output(
     theme_confidence = str(parsed.get("theme_confidence", "")).strip()
 
     if not reflection or not next_step:
-        raise ValueError("La salida de escritura expresiva llego incompleta")
+        raise ExpressiveWritingServiceError(
+            "La salida breve llego incompleta.",
+            log_reason="missing_reflection_or_next_step",
+        )
     if context_tag not in CONTEXT_TAGS:
         context_tag = default_context_tag
     if possible_theme not in POSSIBLE_THEMES:
