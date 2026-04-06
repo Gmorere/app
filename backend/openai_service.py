@@ -16,7 +16,7 @@ if not api_key:
     raise RuntimeError("Falta OPENAI_API_KEY en las variables de entorno del servicio")
 
 MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-5-mini")
-OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "20"))
+OPENAI_TIMEOUT_SECONDS = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "45"))
 client = OpenAI(api_key=api_key, timeout=OPENAI_TIMEOUT_SECONDS)
 
 SYSTEM_PROMPT = """
@@ -82,14 +82,15 @@ Reglas:
 9. No conviertas esto en chat.
 10. No uses frases vacias, coach ni autoayuda generica.
 11. Si hay alguna senal favorable real, puedes nombrarla en positivo.
-12. Devuelve tambien una lectura estructurada en shadow mode.
-13. context_tag debe usar solo uno de estos valores:
+12. Ademas de reflection y next_step, completa tambien las senales estructuradas internas requeridas.
+13. Nunca menciones al usuario "shadow", "shadow mode", "lectura shadow", nombres de campos internos, etiquetas internas ni niveles de confianza.
+14. context_tag debe usar solo uno de estos valores:
     conflicto_interpersonal, sobrecarga_externa, tarea_o_exigencia, incertidumbre_futuro, cuerpo_o_habitos, relacion_comida_cuerpo, aislamiento_vincular, sin_contexto_claro
-14. possible_theme debe usar solo uno de estos valores:
+15. possible_theme debe usar solo uno de estos valores:
     desborde_reactivo, rumiacion, culpa_post_reaccion, miedo_a_perder_control, autocritica, bloqueo_decisional, agotamiento, evitacion, impulso_antojo, desorganizacion, tristeza_desconexion, sin_tema_claro
-15. theme_confidence solo puede ser low o medium.
-16. Si no hay suficiente claridad, usa sin_contexto_claro, sin_tema_claro y low.
-17. No agregues texto fuera del JSON.
+16. theme_confidence solo puede ser low o medium.
+17. Si no hay suficiente claridad, usa sin_contexto_claro, sin_tema_claro y low.
+18. No agregues texto fuera del JSON.
 """
 
 AllowedRiskScreening = Literal["safe", "vulnerability_high", "high_risk"]

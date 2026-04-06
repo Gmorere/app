@@ -55,9 +55,9 @@ Opcional:
 
 El repo ahora incluye:
 
-- [render.yaml](/C:/Users/Gonzalo%20Morere/Desktop/armoniav2_app/render.yaml)
-- [Procfile](/C:/Users/Gonzalo%20Morere/Desktop/armoniav2_app/backend/Procfile)
-- [runtime.txt](/C:/Users/Gonzalo%20Morere/Desktop/armoniav2_app/backend/runtime.txt)
+- [render.yaml](D:/armoniav2_app/render.yaml)
+- [Procfile](D:/armoniav2_app/backend/Procfile)
+- [runtime.txt](D:/armoniav2_app/backend/runtime.txt)
 
 Si `/health` responde pero `/auth/register` da `404`, el deploy activo probablemente no corresponde a este backend o esta usando otro `Root Directory`.
 

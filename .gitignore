@@ -1,5 +1,9 @@
 backend/.env
 backend/.venv/
+backend/__pycache__/
+backend/*.pyc
 .venv/
 .dart_tool/
 build/
+android/.kotlin/
+.flutter-plugins-dependencies
