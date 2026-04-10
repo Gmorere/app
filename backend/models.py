@@ -59,3 +59,57 @@ class ExpressiveWritingSignalRecord(Base):
     risk_level = Column(String(20), nullable=False, default="normal")
     should_offer_human_support = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class V3DayCaptureRecord(Base):
+    __tablename__ = "v3_day_captures"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    day_key = Column(String(10), nullable=False, index=True)
+    capture_date = Column(DateTime(timezone=True), nullable=False)
+    day_mode = Column(String(40), nullable=False)
+    traction_signals_json = Column(Text, nullable=False, default="[]")
+    friction_signals_json = Column(Text, nullable=False, default="[]")
+    visible_bet = Column(Text, nullable=False, default="")
+    tomorrow_guard = Column(Text, nullable=False, default="")
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class V3PulseSnapshotRecord(Base):
+    __tablename__ = "v3_pulse_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    day_key = Column(String(10), nullable=False, index=True)
+    captured_at = Column(DateTime(timezone=True), nullable=False)
+    energy = Column(Integer, nullable=False)
+    load = Column(Integer, nullable=False)
+    calm = Column(Integer, nullable=False)
+    connection = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class V3ExerciseFeedbackRecord(Base):
+    __tablename__ = "v3_exercise_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    client_entry_id = Column(String(120), nullable=False, index=True)
+    exercise_id = Column(String(80), nullable=False)
+    helpful = Column(Boolean, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
+    day_mode = Column(String(40), nullable=True)
+    stored_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())

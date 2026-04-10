@@ -162,3 +162,52 @@ class SessionItem(BaseModel):
 
 class RecentSessionsResponse(BaseModel):
     items: list[SessionItem]
+
+
+class V3DayCapturePayload(BaseModel):
+    date: datetime
+    day_mode: str = Field(..., max_length=40)
+    traction_signals: list[str] = Field(default_factory=list, max_length=3)
+    friction_signals: list[str] = Field(default_factory=list, max_length=3)
+    visible_bet: str = Field(default="", max_length=1000)
+    tomorrow_guard: str = Field(default="", max_length=1000)
+
+
+class V3DayCaptureItem(V3DayCapturePayload):
+    day_key: str
+
+
+class V3DayCaptureListResponse(BaseModel):
+    items: list[V3DayCaptureItem]
+
+
+class V3PulsePayload(BaseModel):
+    timestamp: datetime
+    energy: int = Field(..., ge=1, le=5)
+    load: int = Field(..., ge=1, le=5)
+    calm: int = Field(..., ge=1, le=5)
+    connection: int = Field(..., ge=1, le=5)
+
+
+class V3PulseItem(V3PulsePayload):
+    day_key: str
+
+
+class V3PulseListResponse(BaseModel):
+    items: list[V3PulseItem]
+
+
+class V3ExerciseFeedbackPayload(BaseModel):
+    id: str = Field(..., max_length=120)
+    exercise_id: str = Field(..., max_length=80)
+    helpful: bool
+    created_at: datetime
+    day_mode: str | None = Field(default=None, max_length=40)
+
+
+class V3ExerciseFeedbackItem(V3ExerciseFeedbackPayload):
+    pass
+
+
+class V3ExerciseFeedbackListResponse(BaseModel):
+    items: list[V3ExerciseFeedbackItem]

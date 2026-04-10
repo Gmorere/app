@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -9,7 +10,14 @@ from sqlalchemy.orm import Session
 
 from auth import create_access_token, get_current_user, hash_password, verify_password
 from db import Base, engine, get_db
-from models import ExpressiveWritingSignalRecord, SessionRecord, User
+from models import (
+    ExpressiveWritingSignalRecord,
+    SessionRecord,
+    User,
+    V3DayCaptureRecord,
+    V3ExerciseFeedbackRecord,
+    V3PulseSnapshotRecord,
+)
 from openai_service import generate_armonia_response, generate_expressive_writing_output
 from schemas import (
     ArmoniaRequest,
@@ -23,6 +31,15 @@ from schemas import (
     SessionFeedbackRequest,
     SessionFeedbackResponse,
     SessionItem,
+    V3DayCaptureItem,
+    V3DayCaptureListResponse,
+    V3DayCapturePayload,
+    V3ExerciseFeedbackItem,
+    V3ExerciseFeedbackListResponse,
+    V3ExerciseFeedbackPayload,
+    V3PulseItem,
+    V3PulseListResponse,
+    V3PulsePayload,
     UserOut,
 )
 
@@ -32,7 +49,7 @@ logger = logging.getLogger("armonia-backend")
 app = FastAPI(title="ArmonIA Backend")
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$",
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -106,6 +123,23 @@ def _normalize_risk_level(risk_level: str | None) -> str:
     if normalized in {"normal", "vulnerability_high", "crisis"}:
         return normalized
     return "normal"
+
+
+def _day_key_from_datetime(value: datetime) -> str:
+    normalized = value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    return normalized.strftime("%Y-%m-%d")
+
+
+def _json_list(raw_value: str | None) -> list[str]:
+    if not raw_value:
+        return []
+    try:
+        decoded = json.loads(raw_value)
+        if isinstance(decoded, list):
+            return [str(item).strip() for item in decoded if str(item).strip()]
+    except Exception:
+        return []
+    return []
 
 
 @app.get("/")
@@ -368,3 +402,197 @@ def save_feedback(
     db.refresh(session)
 
     return SessionFeedbackResponse(ok=True, session_id=session.id, helped=session.helped)
+
+
+@app.get("/v3/day-captures", response_model=V3DayCaptureListResponse)
+def get_v3_day_captures(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(V3DayCaptureRecord)
+        .filter(V3DayCaptureRecord.user_id == current_user.id)
+        .order_by(V3DayCaptureRecord.capture_date.desc())
+        .limit(120)
+        .all()
+    )
+    return V3DayCaptureListResponse(
+        items=[
+            V3DayCaptureItem(
+                day_key=row.day_key,
+                date=row.capture_date,
+                day_mode=row.day_mode,
+                traction_signals=_json_list(row.traction_signals_json),
+                friction_signals=_json_list(row.friction_signals_json),
+                visible_bet=row.visible_bet or "",
+                tomorrow_guard=row.tomorrow_guard or "",
+            )
+            for row in rows
+        ]
+    )
+
+
+@app.post("/v3/day-captures", response_model=V3DayCaptureItem)
+def save_v3_day_capture(
+    payload: V3DayCapturePayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    day_key = _day_key_from_datetime(payload.date)
+    row = (
+        db.query(V3DayCaptureRecord)
+        .filter(
+            V3DayCaptureRecord.user_id == current_user.id,
+            V3DayCaptureRecord.day_key == day_key,
+        )
+        .first()
+    )
+    if row is None:
+        row = V3DayCaptureRecord(user_id=current_user.id, day_key=day_key)
+        db.add(row)
+
+    row.capture_date = payload.date
+    row.day_mode = payload.day_mode.strip().lower()
+    row.traction_signals_json = json.dumps(payload.traction_signals)
+    row.friction_signals_json = json.dumps(payload.friction_signals)
+    row.visible_bet = payload.visible_bet
+    row.tomorrow_guard = payload.tomorrow_guard
+    db.commit()
+    db.refresh(row)
+
+    return V3DayCaptureItem(
+        day_key=row.day_key,
+        date=row.capture_date,
+        day_mode=row.day_mode,
+        traction_signals=_json_list(row.traction_signals_json),
+        friction_signals=_json_list(row.friction_signals_json),
+        visible_bet=row.visible_bet or "",
+        tomorrow_guard=row.tomorrow_guard or "",
+    )
+
+
+@app.get("/v3/pulses", response_model=V3PulseListResponse)
+def get_v3_pulses(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(V3PulseSnapshotRecord)
+        .filter(V3PulseSnapshotRecord.user_id == current_user.id)
+        .order_by(V3PulseSnapshotRecord.captured_at.desc())
+        .limit(120)
+        .all()
+    )
+    return V3PulseListResponse(
+        items=[
+            V3PulseItem(
+                day_key=row.day_key,
+                timestamp=row.captured_at,
+                energy=row.energy,
+                load=row.load,
+                calm=row.calm,
+                connection=row.connection,
+            )
+            for row in rows
+        ]
+    )
+
+
+@app.post("/v3/pulses", response_model=V3PulseItem)
+def save_v3_pulse(
+    payload: V3PulsePayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    day_key = _day_key_from_datetime(payload.timestamp)
+    row = (
+        db.query(V3PulseSnapshotRecord)
+        .filter(
+            V3PulseSnapshotRecord.user_id == current_user.id,
+            V3PulseSnapshotRecord.day_key == day_key,
+        )
+        .first()
+    )
+    if row is None:
+        row = V3PulseSnapshotRecord(user_id=current_user.id, day_key=day_key)
+        db.add(row)
+
+    row.captured_at = payload.timestamp
+    row.energy = payload.energy
+    row.load = payload.load
+    row.calm = payload.calm
+    row.connection = payload.connection
+    db.commit()
+    db.refresh(row)
+
+    return V3PulseItem(
+        day_key=row.day_key,
+        timestamp=row.captured_at,
+        energy=row.energy,
+        load=row.load,
+        calm=row.calm,
+        connection=row.connection,
+    )
+
+
+@app.get("/v3/exercise-feedback", response_model=V3ExerciseFeedbackListResponse)
+def get_v3_exercise_feedback(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(V3ExerciseFeedbackRecord)
+        .filter(V3ExerciseFeedbackRecord.user_id == current_user.id)
+        .order_by(V3ExerciseFeedbackRecord.created_at.desc())
+        .limit(120)
+        .all()
+    )
+    return V3ExerciseFeedbackListResponse(
+        items=[
+            V3ExerciseFeedbackItem(
+                id=row.client_entry_id,
+                exercise_id=row.exercise_id,
+                helpful=row.helpful,
+                created_at=row.created_at,
+                day_mode=row.day_mode,
+            )
+            for row in rows
+        ]
+    )
+
+
+@app.post("/v3/exercise-feedback", response_model=V3ExerciseFeedbackItem)
+def save_v3_exercise_feedback(
+    payload: V3ExerciseFeedbackPayload,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    row = (
+        db.query(V3ExerciseFeedbackRecord)
+        .filter(
+            V3ExerciseFeedbackRecord.user_id == current_user.id,
+            V3ExerciseFeedbackRecord.client_entry_id == payload.id,
+        )
+        .first()
+    )
+    if row is None:
+        row = V3ExerciseFeedbackRecord(
+            user_id=current_user.id,
+            client_entry_id=payload.id,
+        )
+        db.add(row)
+
+    row.exercise_id = payload.exercise_id
+    row.helpful = payload.helpful
+    row.created_at = payload.created_at
+    row.day_mode = payload.day_mode
+    db.commit()
+    db.refresh(row)
+
+    return V3ExerciseFeedbackItem(
+        id=row.client_entry_id,
+        exercise_id=row.exercise_id,
+        helpful=row.helpful,
+        created_at=row.created_at,
+        day_mode=row.day_mode,
+    )
